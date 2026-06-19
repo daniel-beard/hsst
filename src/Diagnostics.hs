@@ -1,6 +1,7 @@
 module Diagnostics
   ( Span(..)
   , noSpan
+  , mergeSpan
   , Diagnostic(..)
   , renderDiagnostic
   ) where
@@ -18,6 +19,16 @@ data Span = Span
 -- are never the subject of a diagnostic, so this is never rendered.
 noSpan :: Span
 noSpan = Span 0 0
+
+-- The smallest span covering both operands, used to derive a composite node's
+-- span from its children. A `noSpan` operand (e.g. the synthetic `compose`
+-- inserted for `|>`) contributes nothing, so the real child's span wins.
+mergeSpan :: Span -> Span -> Span
+mergeSpan a b
+  | a == noSpan = b
+  | b == noSpan = a
+  | otherwise   = Span (min (spanStart a) (spanStart b))
+                       (max (spanEnd a)   (spanEnd b))
 
 -- A structured error: a message, the span it points at, and a short label
 -- drawn under the caret. The source text is supplied separately at render

@@ -11,7 +11,21 @@ import Data.Type.Equality ((:~:)(Refl))
 
 import Syntax
 import Core
+import Diagnostics (Span, Diagnostic(..))
 import qualified Prims as Prims
+
+-- An "internal" error: a soundness bug in an earlier pass, not a user mistake.
+-- Still given a span so it lands somewhere useful if it ever fires.
+internal :: Span -> String -> Either Diagnostic a
+internal sp msg =
+  Left Diagnostic { diagMessage = "internal: " ++ msg, diagSpan = sp, diagLabel = "" }
+
+-- Reify a UType at a known span, turning the "ambiguous type" failure into a
+-- diagnostic that points at the expression whose type couldn't be pinned down.
+reifyAt :: Span -> UType -> Either Diagnostic ExType
+reifyAt sp ut = case reifyTy ut of
+  Right ex -> Right ex
+  Left msg -> Left Diagnostic { diagMessage = msg, diagSpan = sp, diagLabel = "ambiguous type" }
 
 -- The elaboration-time type environment: a stack of GADT singleton types
 -- mirroring the de Bruijn lambda-binder stack. Indexed by the same `g`
@@ -22,56 +36,60 @@ data TyEnv g where
   TyCons :: Ty t -> TyEnv g -> TyEnv (g, t)
 
 -- Look up the i-th binder's GADT type, returning a Typed Var witness.
-lookupVar :: Int -> TyEnv g -> Either String (Typed (Var g))
-lookupVar _ TyNil = Left "internal: dangling de Bruijn index in elaboration"
-lookupVar 0 (TyCons ty _)  = Right (Typed ty ZVar)
-lookupVar n (TyCons _  rest) = do
-  Typed ty v <- lookupVar (n - 1) rest
+lookupVar :: Span -> Int -> TyEnv g -> Either Diagnostic (Typed (Var g))
+lookupVar sp _ TyNil = internal sp "dangling de Bruijn index in elaboration"
+lookupVar _  0 (TyCons ty _)  = Right (Typed ty ZVar)
+lookupVar sp n (TyCons _  rest) = do
+  Typed ty v <- lookupVar sp (n - 1) rest
   Right (Typed ty (SVar v))
 
 -- Elaborate an annotated, monomorphic term into a Typed (Term g), using
 -- the inferred annotations to drive both reifyTy (UType -> Ty) and
--- cmpTy-style equality checks.
-elaborate :: TyEnv g -> AnnTerm -> Either String (Typed (Term g))
+-- cmpTy-style equality checks. Each node's span is carried so a failure
+-- here points back at the source.
+elaborate :: TyEnv g -> AnnTerm -> Either Diagnostic (Typed (Term g))
 elaborate env e = case e of
-  AStr  v -> Right (Typed TyStr   (TStr v))
-  AInt  v -> Right (Typed TyIntT  (TInt v))
-  ABool v -> Right (Typed TyBoolT (TBool v))
+  AStr  _ v -> Right (Typed TyStr   (TStr v))
+  AInt  _ v -> Right (Typed TyIntT  (TInt v))
+  ABool _ v -> Right (Typed TyBoolT (TBool v))
 
-  AVar i ty -> do
-    Typed ty' v <- lookupVar i env
+  AVar sp i ty -> do
+    Typed ty' v <- lookupVar sp i env
     -- The annotation should match; cmpTy gives us the runtime witness.
-    expected <- reifyTy ty
-    case expected of
-      ExType ety -> case cmpTy ety ty' of
-        Just Refl -> Right (Typed ty' (TVar v))
-        Nothing   -> Left $
-          "internal: AVar annotation " ++ prettyUType ty
-          ++ " disagrees with elaboration env type " ++ showTy ty'
+    ExType ety <- reifyAt sp ty
+    case cmpTy ety ty' of
+      Just Refl -> Right (Typed ty' (TVar v))
+      Nothing   -> internal sp $
+        "AVar annotation " ++ prettyUType ty
+        ++ " disagrees with elaboration env type " ++ showTy ty'
 
-  APrim n ty -> do
-    ExType rty <- reifyTy ty
+  APrim sp n ty -> do
+    ExType rty <- reifyAt sp ty
     case Prims.lookupImpl n rty of
       Just impl -> Right (Typed rty (TPrim n rty impl))
-      Nothing   -> Left $
-        "primitive " ++ n ++ " has no implementation at type " ++ showTy rty
+      Nothing   -> Left Diagnostic
+        { diagMessage = "primitive " ++ n
+                          ++ " has no implementation at type " ++ showTy rty
+        , diagSpan    = sp
+        , diagLabel   = "unsupported at this type"
+        }
 
-  ALam binderUTy body -> do
-    ExType bTy <- reifyTy binderUTy
+  ALam sp binderUTy body -> do
+    ExType bTy <- reifyAt sp binderUTy
     Typed retTy body' <- elaborate (TyCons bTy env) body
     Right (Typed (TyArrT bTy retTy) (TLam bTy body'))
 
-  AApp f a -> do
+  AApp sp f a -> do
     Typed tF fTerm <- elaborate env f
     Typed tA aTerm <- elaborate env a
     case tF of
       TyArrT bnd ret -> case cmpTy tA bnd of
         Just Refl -> Right (Typed ret (TApp fTerm aTerm))
-        Nothing   -> Left $
-          "internal: application argument type " ++ showTy tA
+        Nothing   -> internal sp $
+          "application argument type " ++ showTy tA
           ++ " does not match function domain " ++ showTy bnd
-      _ -> Left $
-        "internal: application of non-function type " ++ showTy tF
+      _ -> internal sp $
+        "application of non-function type " ++ showTy tF
 
-elaborateClosed :: AnnTerm -> Either String (Typed (Term ()))
+elaborateClosed :: AnnTerm -> Either Diagnostic (Typed (Term ()))
 elaborateClosed = elaborate TyNil

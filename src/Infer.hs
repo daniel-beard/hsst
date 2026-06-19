@@ -12,6 +12,7 @@ import Data.Map.Strict (Map)
 import Data.Set (Set)
 
 import Syntax
+import Diagnostics (Span, Diagnostic(..), noSpan)
 
 -- A type scheme: forall vars. ty.
 data Scheme = Scheme [TVar] UType
@@ -37,13 +38,13 @@ applyAnn :: Subst -> AnnTerm -> AnnTerm
 applyAnn s = go
   where
     go t = case t of
-      AVar  i ty    -> AVar i (applyTy s ty)
-      APrim n ty    -> APrim n (applyTy s ty)
-      AApp  f a     -> AApp (go f) (go a)
-      ALam  bt b    -> ALam (applyTy s bt) (go b)
-      AStr  _       -> t
-      AInt  _       -> t
-      ABool _       -> t
+      AVar  sp i ty -> AVar sp i (applyTy s ty)
+      APrim sp n ty -> APrim sp n (applyTy s ty)
+      AApp  sp f a  -> AApp sp (go f) (go a)
+      ALam  sp bt b -> ALam sp (applyTy s bt) (go b)
+      AStr  _ _     -> t
+      AInt  _ _     -> t
+      ABool _ _     -> t
 
 -- s2 ∘ s1
 composeS :: Subst -> Subst -> Subst
@@ -59,7 +60,7 @@ ftvTy t = case t of
 -- Inference monad: fresh type-var supply + errors.
 newtype Fresh = Fresh { nextTy :: TVar }
 
-type Infer a = StateT Fresh (Except String) a
+type Infer a = StateT Fresh (Except Diagnostic) a
 
 freshTy :: Infer UType
 freshTy = do
@@ -67,31 +68,38 @@ freshTy = do
   put (Fresh (n + 1))
   pure (TyVar n)
 
-inferErr :: String -> Infer a
-inferErr = throwError
+-- Abort inference with a diagnostic pointing at the given span.
+failAt :: Span -> String -> String -> Infer a
+failAt sp msg lbl =
+  throwError Diagnostic { diagMessage = msg, diagSpan = sp, diagLabel = lbl }
 
--- Robinson unification.
-unify :: UType -> UType -> Infer Subst
-unify a b = case (a, b) of
+-- Robinson unification. `sp` is the span to blame if the two types don't
+-- unify -- threaded down so that the leaf mismatch still points at the
+-- expression that caused it (in practice, an application's argument).
+unify :: Span -> UType -> UType -> Infer Subst
+unify sp a b = case (a, b) of
   (TyString, TyString) -> pure emptySubst
   (TyInt,    TyInt)    -> pure emptySubst
   (TyBool,   TyBool)   -> pure emptySubst
-  (TyList x, TyList y) -> unify x y
+  (TyList x, TyList y) -> unify sp x y
   (TyArr l1 r1, TyArr l2 r2) -> do
-    s1 <- unify l1 l2
-    s2 <- unify (applyTy s1 r1) (applyTy s1 r2)
+    s1 <- unify sp l1 l2
+    s2 <- unify sp (applyTy s1 r1) (applyTy s1 r2)
     pure (s2 `composeS` s1)
-  (TyVar n, t) -> bindVar n t
-  (t, TyVar n) -> bindVar n t
-  _ -> inferErr $ "type mismatch: cannot unify "
-                ++ prettyUType a ++ " with " ++ prettyUType b
+  (TyVar n, t) -> bindVar sp n t
+  (t, TyVar n) -> bindVar sp n t
+  _ -> failAt sp
+         ("type mismatch: cannot unify " ++ prettyUType a
+            ++ " with " ++ prettyUType b)
+         "mismatched types"
 
-bindVar :: TVar -> UType -> Infer Subst
-bindVar n (TyVar m) | n == m = pure emptySubst
-bindVar n t
+bindVar :: Span -> TVar -> UType -> Infer Subst
+bindVar _ n (TyVar m) | n == m = pure emptySubst
+bindVar sp n t
   | n `Set.member` ftvTy t =
-      inferErr $ "occurs check: " ++ prettyUType (TyVar n)
-              ++ " in " ++ prettyUType t
+      failAt sp
+        ("occurs check: " ++ prettyUType (TyVar n) ++ " in " ++ prettyUType t)
+        "infinite type"
   | otherwise = pure (Map.singleton n t)
 
 -- Instantiate a scheme by refreshing its bound type variables.
@@ -106,55 +114,58 @@ instantiate (Scheme vs t) = do
 -- by the W pass below — that's how this gets us let-polymorphism.
 elimLets :: IxTerm -> IxTerm
 elimLets t = case t of
-  ILet e1 e2 -> elimLets (substIx 0 (elimLets e1) e2)
-  IApp f a   -> IApp (elimLets f) (elimLets a)
-  ILam b     -> ILam (elimLets b)
-  IVar  _    -> t
-  IPrim _    -> t
-  IStr  _    -> t
-  IInt  _    -> t
-  IBool _    -> t
+  ILet _ e1 e2 -> elimLets (substIx 0 (elimLets e1) e2)
+  IApp sp f a  -> IApp sp (elimLets f) (elimLets a)
+  ILam sp b    -> ILam sp (elimLets b)
+  IVar  _ _    -> t
+  IPrim _ _    -> t
+  IStr  _ _    -> t
+  IInt  _ _    -> t
+  IBool _ _    -> t
 
 -- Algorithm W over a let-free IxTerm.
 -- The local context is a stack of monomorphic types for lambda binders.
 -- Returns (subst, type, annotated-term).
 infer :: PrimEnv -> [UType] -> IxTerm -> Infer (Subst, UType, AnnTerm)
 infer prims ctx e = case e of
-  IStr  v -> pure (emptySubst, TyString, AStr v)
-  IInt  v -> pure (emptySubst, TyInt,    AInt v)
-  IBool v -> pure (emptySubst, TyBool,   ABool v)
+  IStr  sp v -> pure (emptySubst, TyString, AStr sp v)
+  IInt  sp v -> pure (emptySubst, TyInt,    AInt sp v)
+  IBool sp v -> pure (emptySubst, TyBool,   ABool sp v)
 
-  IVar i
+  IVar sp i
     | i < 0 || i >= length ctx ->
-        inferErr $ "internal: dangling de Bruijn index " ++ show i
+        failAt sp ("internal: dangling de Bruijn index " ++ show i) ""
     | otherwise ->
         let ty = ctx !! i
-        in pure (emptySubst, ty, AVar i ty)
+        in pure (emptySubst, ty, AVar sp i ty)
 
-  IPrim x -> case Map.lookup x prims of
-    Nothing -> inferErr $ "unknown primitive: " ++ x
+  IPrim sp x -> case Map.lookup x prims of
+    Nothing -> failAt sp ("unknown primitive: " ++ x) "not a known primitive"
     Just sc -> do
       ty <- instantiate sc
-      pure (emptySubst, ty, APrim x ty)
+      pure (emptySubst, ty, APrim sp x ty)
 
-  ILam body -> do
+  ILam sp body -> do
     tv <- freshTy
     (s, tBody, aBody) <- infer prims (tv : ctx) body
     let bt = applyTy s tv
-    pure (s, TyArr bt tBody, ALam bt aBody)
+    pure (s, TyArr bt tBody, ALam sp bt aBody)
 
-  IApp f a -> do
+  IApp sp f a -> do
     tv <- freshTy
     (s1, tF, aF) <- infer prims ctx f
     (s2, tA, aA) <- infer prims (map (applyTy s1) ctx) a
-    s3 <- unify (applyTy s2 tF) (TyArr tA tv)
+    -- Blame the argument: that's the expression whose type has to fit the
+    -- function's domain, and the one a "wrong type" message is about.
+    s3 <- unify (ixSpan a) (applyTy s2 tF) (TyArr tA tv)
     let s = s3 `composeS` s2 `composeS` s1
-    pure (s, applyTy s3 tv, AApp aF aA)
+    pure (s, applyTy s3 tv, AApp sp aF aA)
 
-  ILet _ _ ->
-    inferErr "internal: ILet should have been eliminated before inference"
+  ILet{} ->
+    failAt noSpan
+      "internal: ILet should have been eliminated before inference" ""
 
-inferProgram :: PrimEnv -> IxTerm -> Either String AnnTerm
+inferProgram :: PrimEnv -> IxTerm -> Either Diagnostic AnnTerm
 inferProgram prims t0 =
   let t = elimLets t0
   in case runExcept (evalStateT (infer prims [] t) (Fresh 1000)) of

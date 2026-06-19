@@ -47,3 +47,37 @@ main = hspec $ do
     it "minus subtracts two ints" $
       runProgram "minus(10, 4)" ""
         `shouldBe` Right "6"
+
+  describe "diagnostics" $ do
+    it "renders an unbound variable with a rustc-like error format" $
+      runProgram "words |> foo" ""
+        `shouldBe` Left
+          (unlines
+             [ "error: unbound variable: foo"
+             , " --> <arg>:1:10"
+             , "  |"
+             , "1 | words |> foo"
+             , "  |          ^^^ not found in scope"
+             ])
+
+    it "points a type mismatch (from inference) at the offending argument" $
+      runProgram "plus(2, \"x\")" ""
+        `shouldBe` Left
+          (unlines
+             [ "error: type mismatch: cannot unify Int with String"
+             , " --> <arg>:1:9"
+             , "  |"
+             , "1 | plus(2, \"x\")"
+             , "  |         ^^^ mismatched types"
+             ])
+
+    it "points an ambiguous top-level type (from elaboration) at the expression" $
+      runProgram "\\x -> x" ""
+        `shouldBe` Left
+          (unlines
+             [ "error: ambiguous type: free type variable t1000 survived inference (the program is polymorphic at the top level and would need an annotation to run)"
+             , " --> <arg>:1:7"
+             , "  |"
+             , "1 | \\x -> x"
+             , "  |       ^ ambiguous type"
+             ])

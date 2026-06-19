@@ -20,8 +20,8 @@ runProgram :: String -> String -> Either String String
 runProgram src stdin_ = do
   uterm  <- parseProgram src
   ixterm <- first (renderDiagnostic src) (resolve Prims.primNames uterm)
-  ann    <- inferProgram (Map.fromList Prims.primSchemes) ixterm
-  Typed ty term <- elaborateClosed ann
+  ann    <- first (renderDiagnostic src) (inferProgram (Map.fromList Prims.primSchemes) ixterm)
+  Typed ty term <- first (renderDiagnostic src) (elaborateClosed ann)
   case ty of
     -- If the program is a String -> a, feed it stdin.
     TyArrT TyStr ret ->

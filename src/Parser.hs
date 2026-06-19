@@ -45,11 +45,21 @@ identifierSpan = (lexeme . try) (p >>= check)
       | x `elem` reservedWords = fail $ "keyword " ++ show x ++ " is reserved"
       | otherwise              = pure (sp, x)
 
-intLit :: Parser Int
-intLit = lexeme (L.signed (pure ()) L.decimal)
+-- Capture the span of a raw (pre-whitespace) token parser. The end offset is
+-- read before `lexeme` consumes trailing whitespace, so the span covers just
+-- the token text -- the same trick `identifierSpan` uses.
+spanned :: Parser a -> Parser (Span, a)
+spanned p = lexeme $ do
+  o1 <- getOffset
+  x  <- p
+  o2 <- getOffset
+  pure (Span o1 o2, x)
 
-stringLit :: Parser String
-stringLit = lexeme $ do
+intLitSpan :: Parser (Span, Int)
+intLitSpan = spanned (L.signed (pure ()) L.decimal)
+
+stringLitSpan :: Parser (Span, String)
+stringLitSpan = spanned $ do
   void (char '"')
   cs <- many (escape <|> noneOf ("\"\\" :: String))
   void (char '"')
@@ -105,15 +115,16 @@ atom :: Parser UTerm
 atom = choice
   [ lambda
   , letBinding
-  , UStr  <$> stringLit
-  , UInt  <$> intLit
-  , UBool <$> boolLit
-  , (\(sp, x) -> UVar sp x) <$> identifierSpan
+  , (\(sp, s) -> UStr  sp s) <$> stringLitSpan
+  , (\(sp, n) -> UInt  sp n) <$> intLitSpan
+  , (\(sp, b) -> UBool sp b) <$> boolLitSpan
+  , (\(sp, x) -> UVar  sp x) <$> identifierSpan
   , parens expr
   ]
 
-boolLit :: Parser Bool
-boolLit = (True <$ reserved "true") <|> (False <$ reserved "false")
+boolLitSpan :: Parser (Span, Bool)
+boolLitSpan = spanned $
+  ((True <$ string "true") <|> (False <$ string "false")) <* notFollowedBy alphaNumChar
 
 lambda :: Parser UTerm
 lambda = do
