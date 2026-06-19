@@ -1,0 +1,224 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.38.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           hsst
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/daniel-beard/hsst#readme>
+homepage:       https://github.com/daniel-beard/hsst#readme
+bug-reports:    https://github.com/daniel-beard/hsst/issues
+author:         Daniel Beard
+maintainer:     daniel.beard@splitwise.com
+copyright:      2026 Daniel Beard
+license:        BSD-3-Clause
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/daniel-beard/hsst
+
+library
+  exposed-modules:
+      Core
+      Diagnostics
+      Elaborate
+      Eval
+      Infer
+      Lib
+      Parser
+      Prims
+      Resolve
+      Syntax
+  other-modules:
+      Paths_hsst
+  autogen-modules:
+      Paths_hsst
+  hs-source-dirs:
+      src
+  default-extensions:
+      BangPatterns
+      BinaryLiterals
+      ConstraintKinds
+      DataKinds
+      DefaultSignatures
+      DeriveAnyClass
+      DeriveDataTypeable
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      DeriveTraversable
+      DoAndIfThenElse
+      EmptyDataDecls
+      ExistentialQuantification
+      FlexibleContexts
+      FlexibleInstances
+      FunctionalDependencies
+      GADTs
+      GeneralizedNewtypeDeriving
+      InstanceSigs
+      KindSignatures
+      LambdaCase
+      MultiParamTypeClasses
+      MultiWayIf
+      NamedFieldPuns
+      OverloadedLabels
+      OverloadedStrings
+      OverloadedRecordDot
+      PartialTypeSignatures
+      PatternGuards
+      PolyKinds
+      QuasiQuotes
+      RankNTypes
+      RecordWildCards
+      ScopedTypeVariables
+      StandaloneDeriving
+      TupleSections
+      TypeFamilies
+      TypeSynonymInstances
+      ViewPatterns
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      base >=4.11 && <10
+    , base64-bytestring
+    , bytestring
+    , containers
+    , megaparsec
+    , mtl
+    , parser-combinators
+    , text
+    , vector
+  default-language: Haskell2010
+
+executable hsst
+  main-is: Main.hs
+  other-modules:
+      Paths_hsst
+  autogen-modules:
+      Paths_hsst
+  hs-source-dirs:
+      app
+  default-extensions:
+      BangPatterns
+      BinaryLiterals
+      ConstraintKinds
+      DataKinds
+      DefaultSignatures
+      DeriveAnyClass
+      DeriveDataTypeable
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      DeriveTraversable
+      DoAndIfThenElse
+      EmptyDataDecls
+      ExistentialQuantification
+      FlexibleContexts
+      FlexibleInstances
+      FunctionalDependencies
+      GADTs
+      GeneralizedNewtypeDeriving
+      InstanceSigs
+      KindSignatures
+      LambdaCase
+      MultiParamTypeClasses
+      MultiWayIf
+      NamedFieldPuns
+      OverloadedLabels
+      OverloadedStrings
+      OverloadedRecordDot
+      PartialTypeSignatures
+      PatternGuards
+      PolyKinds
+      QuasiQuotes
+      RankNTypes
+      RecordWildCards
+      ScopedTypeVariables
+      StandaloneDeriving
+      TupleSections
+      TypeFamilies
+      TypeSynonymInstances
+      ViewPatterns
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.11 && <10
+    , base64-bytestring
+    , bytestring
+    , containers
+    , hsst
+    , megaparsec
+    , mtl
+    , parser-combinators
+    , text
+    , vector
+  default-language: Haskell2010
+
+test-suite hsst-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_hsst
+  autogen-modules:
+      Paths_hsst
+  hs-source-dirs:
+      test
+  default-extensions:
+      BangPatterns
+      BinaryLiterals
+      ConstraintKinds
+      DataKinds
+      DefaultSignatures
+      DeriveAnyClass
+      DeriveDataTypeable
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      DeriveTraversable
+      DoAndIfThenElse
+      EmptyDataDecls
+      ExistentialQuantification
+      FlexibleContexts
+      FlexibleInstances
+      FunctionalDependencies
+      GADTs
+      GeneralizedNewtypeDeriving
+      InstanceSigs
+      KindSignatures
+      LambdaCase
+      MultiParamTypeClasses
+      MultiWayIf
+      NamedFieldPuns
+      OverloadedLabels
+      OverloadedStrings
+      OverloadedRecordDot
+      PartialTypeSignatures
+      PatternGuards
+      PolyKinds
+      QuasiQuotes
+      RankNTypes
+      RecordWildCards
+      ScopedTypeVariables
+      StandaloneDeriving
+      TupleSections
+      TypeFamilies
+      TypeSynonymInstances
+      ViewPatterns
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.11 && <10
+    , base64-bytestring
+    , bytestring
+    , containers
+    , hspec
+    , hsst
+    , megaparsec
+    , mtl
+    , parser-combinators
+    , text
+    , vector
+  default-language: Haskell2010
