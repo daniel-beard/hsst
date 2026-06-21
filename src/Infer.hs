@@ -102,6 +102,14 @@ notAFunction :: Span -> UType -> Infer Subst
 notAFunction sp t =
   failAt sp ("expected a function, but got " ++ prettyUType t) "not a function"
 
+-- A type that definitely isn't a function: a concrete base/list type, 
+-- as opposed to an arrow (a function) or a type variable.
+notFunctionType :: UType -> Bool
+notFunctionType t = case t of
+  TyArr _ _ -> False
+  TyVar _   -> False
+  _         -> True
+
 bindVar :: Span -> TVar -> UType -> Infer Subst
 bindVar _ n (TyVar m) | n == m = pure emptySubst
 bindVar sp n t
@@ -166,11 +174,20 @@ infer prims ctx e = case e of
     tv <- freshTy
     (s1, tF, aF) <- infer prims ctx f
     (s2, tA, aA) <- infer prims (map (applyTy s1) ctx) a
-    -- Blame the argument: that's the expression whose type has to fit the
-    -- function's domain, and the one a "wrong type" message is about.
-    s3 <- unify (ixSpan a) (applyTy s2 tF) (TyArr tA tv)
-    let s = s3 `composeS` s2 `composeS` s1
-    pure (s, applyTy s3 tv, AApp sp aF aA)
+    case (f, applyTy s2 tA) of
+      -- `x |> f` desugars to a `|>` application whose left operand x must be a function (|> composes). 
+      -- If x is a concrete non-function value, suggest value application: `&`. 
+      (IPrim pSpan "|>", tLeft) | notFunctionType tLeft ->
+        failAt pSpan
+          ("expected a function, but got " ++ prettyUType tLeft
+             ++ "; |> composes functions -- use & to apply a value to a function")
+          "did you mean & ?"
+      _ -> do
+        -- Blame the argument: that's the expression whose type has to fit the
+        -- function's domain, and the one a "wrong type" message is about.
+        s3 <- unify (ixSpan a) (applyTy s2 tF) (TyArr tA tv)
+        let s = s3 `composeS` s2 `composeS` s1
+        pure (s, applyTy s3 tv, AApp sp aF aA)
 
   ILet{} ->
     failAt noSpan

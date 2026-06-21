@@ -9,7 +9,7 @@ import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
 import Syntax
-import Diagnostics (Span(..), noSpan)
+import Diagnostics (Span(..))
 
 type Parser = Parsec Void String
 
@@ -46,14 +46,17 @@ identifierSpan = (lexeme . try) (p >>= check)
       | otherwise              = pure (sp, x)
 
 -- Capture the span of a raw (pre-whitespace) token parser. The end offset is
--- read before `lexeme` consumes trailing whitespace, so the span covers just
--- the token text -- the same trick `identifierSpan` uses.
+-- read before `lexeme` consumes trailing whitespace, so the span covers just the token text
 spanned :: Parser a -> Parser (Span, a)
 spanned p = lexeme $ do
   o1 <- getOffset
   x  <- p
   o2 <- getOffset
   pure (Span o1 o2, x)
+
+-- The span of an operator symbol -- just the token, no trailing whitespace.
+operator :: String -> Parser Span
+operator s = fst <$> spanned (try (string s))
 
 intLitSpan :: Parser (Span, Int)
 intLitSpan = spanned (L.signed (pure ()) L.decimal)
@@ -103,22 +106,19 @@ expr = do
   where
     rest e =
       (do
-         _  <- try (symbol "|>")
+         sp <- operator "|>"
          e2 <- appExpr
-         rest (compose e e2))
+         rest (pipe sp e e2))
       <|> (do
          _  <- try (symbol "&")
          e2 <- appExpr
          rest (UApp e2 e))
       <|> pure e
 
--- f |> g  desugars to  compose(f, g).
--- `compose` is an ordinary polymorphic primitive in the initial environment,
--- so HM gives it (a -> b) -> (b -> c) -> (a -> c) and instantiates per use-site.
--- x & f  desugars to plain application  f(x)  (Haskell's Data.Function.(&)):
--- it feeds a *value* into a function, where |> composes two functions.
-compose :: UTerm -> UTerm -> UTerm
-compose f g = UApp (UApp (UVar noSpan "compose") f) g
+-- f |> g  desugars to an application of the `|>` primitive (which behaves exactly like `compose`)
+-- Distinct from `compose` allows suggesting `&` when the left operand is a value, not a function.
+pipe :: Span -> UTerm -> UTerm -> UTerm
+pipe sp f g = UApp (UApp (UVar sp "|>") f) g
 
 -- Application: an atom followed by zero or more `(...)` argument lists.
 appExpr :: Parser UTerm

@@ -92,6 +92,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - hsst
+    - process
 
 tests:
   hsst-test:

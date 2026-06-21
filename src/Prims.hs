@@ -55,25 +55,29 @@ monoPrim :: forall s. Name -> Ty s -> s -> Prim
 monoPrim name ty impl =
   Prim name (Scheme [] (tyToUType ty)) (mono ty impl)
 
+-- (a -> b) -> (b -> c) -> (a -> c). Shared by `compose` and the `|>` operator.
+composeScheme :: Scheme
+composeScheme =
+  Scheme [a, b, c] $
+    (TyVar a `TyArr` TyVar b)
+      `TyArr` ((TyVar b `TyArr` TyVar c) `TyArr` (TyVar a `TyArr` TyVar c))
+
 prims :: [Prim]
 prims =
   -- Pipeline plumbing
-  [ Prim
-      "compose"
-      ( Scheme [a, b, c] $
-          (TyVar a `TyArr` TyVar b)
-            `TyArr` ((TyVar b `TyArr` TyVar c) `TyArr` (TyVar a `TyArr` TyVar c))
-      )
-      implCompose,
+  [ Prim "compose" composeScheme implCompose,
+    -- `|>` is the same function as compose; separate for inference diagnostics.
+    -- Not a valid identifier, can only ever be emitted by the parser desugaring `|>`.
+    Prim "|>" composeScheme implCompose,
     -- tee: render the current value (Show-style, to stdout) and pass it through.
     Prim
       "tee"
       (Scheme [a] $ TyVar a `TyArr` TyVar a) implTee,
     -- String <-> [String]. A String is [Char]. The polymorphic list ops below also apply.
-    monoPrim "words"      (tyStr `TyArrT` (TyListT tyStr)) words,
-    monoPrim "unwords"    ((TyListT tyStr) `TyArrT` tyStr) unwords,
-    monoPrim "lines"      (tyStr `TyArrT` (TyListT tyStr)) lines,
-    monoPrim "unlines"    ((TyListT tyStr) `TyArrT` tyStr) unlines,
+    monoPrim "words"      (tyStr `TyArrT` TyListT tyStr) words,
+    monoPrim "unwords"    (TyListT tyStr `TyArrT` tyStr) unwords,
+    monoPrim "lines"      (tyStr `TyArrT` TyListT tyStr) lines,
+    monoPrim "unlines"    (TyListT tyStr `TyArrT` tyStr) unlines,
     -- Scalar string ops
     monoPrim "uppercase"  (tyStr `TyArrT` tyStr) (map toUpper),
     monoPrim "lowercase"  (tyStr `TyArrT` tyStr) (map toLower),

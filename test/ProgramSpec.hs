@@ -67,16 +67,28 @@ spec = do
              , "  |         ^^^ mismatched types"
              ])
 
-    it "reports a clear error when a value is used where a function is needed" $
-      -- `|>` is composition, so its left side must be a function
+    it "suggests & when the left operand of |> is a value" $
+      -- `|>` is composition, so its left side must be a function; a value there
+      -- is almost certainly meant as `&` (value application).
       runProgram "'c' |> upcaseChar" ""
         `shouldBe` Left
           (unlines
-             [ "error: expected a function, but got Char"
-             , " --> <arg>:1:1"
+             [ "error: expected a function, but got Char; |> composes functions -- use & to apply a value to a function"
+             , " --> <arg>:1:5"
              , "  |"
              , "1 | 'c' |> upcaseChar"
-             , "  | ^^^ not a function"
+             , "  |     ^^ did you mean & ?"
+             ])
+
+    it "reports a plain not-a-function error away from |> (no & hint)" $
+      runProgram "compose('c', upcaseChar)" ""
+        `shouldBe` Left
+          (unlines
+             [ "error: expected a function, but got Char"
+             , " --> <arg>:1:9"
+             , "  |"
+             , "1 | compose('c', upcaseChar)"
+             , "  |         ^^^ not a function"
              ])
 
     it "points an ambiguous top-level type (from elaboration) at the expression" $
