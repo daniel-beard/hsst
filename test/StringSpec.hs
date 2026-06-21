@@ -41,6 +41,10 @@ spec = describe "strings & chars" $ do
     runProgram "upcaseChar('a')" ""
       `shouldBe` Right "'A'"
 
+  it "& feeds a char value into a function" $
+    runProgram "'a' & upcaseChar" ""
+      `shouldBe` Right "'A'"
+
   it "a top-level function defaults its input to String (stdin filter)" $
     runProgram "\\x -> x" "passthrough"
       `shouldBe` Right "\"passthrough\""

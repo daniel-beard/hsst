@@ -94,7 +94,8 @@ parseProgram src =
     Left err  -> Left (errorBundlePretty err)
     Right e   -> Right e
 
--- Lowest precedence: forward composition with |>
+-- Lowest precedence, left-associative: forward composition `|>` and value
+-- application `&`. Both chain left-to-right, e.g. `x & f & g` is `g(f(x))`.
 expr :: Parser UTerm
 expr = do
   e0 <- appExpr
@@ -105,11 +106,17 @@ expr = do
          _  <- try (symbol "|>")
          e2 <- appExpr
          rest (compose e e2))
+      <|> (do
+         _  <- try (symbol "&")
+         e2 <- appExpr
+         rest (UApp e2 e))
       <|> pure e
 
 -- f |> g  desugars to  compose(f, g).
 -- `compose` is an ordinary polymorphic primitive in the initial environment,
 -- so HM gives it (a -> b) -> (b -> c) -> (a -> c) and instantiates per use-site.
+-- x & f  desugars to plain application  f(x)  (Haskell's Data.Function.(&)):
+-- it feeds a *value* into a function, where |> composes two functions.
 compose :: UTerm -> UTerm -> UTerm
 compose f g = UApp (UApp (UVar noSpan "compose") f) g
 

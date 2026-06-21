@@ -32,6 +32,10 @@ spec = do
       runProgram "lines |> length" "a\nb\nc\n"
         `shouldBe` Right "3"
 
+    it "& applies a value to a function (left-to-right)" $
+      runProgram "3 & plus(2)" ""
+        `shouldBe` Right "5"
+
     it "plus adds two ints" $
       runProgram "plus(2, 3)" ""
         `shouldBe` Right "5"
@@ -61,6 +65,18 @@ spec = do
              , "  |"
              , "1 | plus(2, \"x\")"
              , "  |         ^^^ mismatched types"
+             ])
+
+    it "reports a clear error when a value is used where a function is needed" $
+      -- `|>` is composition, so its left side must be a function
+      runProgram "'c' |> upcaseChar" ""
+        `shouldBe` Left
+          (unlines
+             [ "error: expected a function, but got Char"
+             , " --> <arg>:1:1"
+             , "  |"
+             , "1 | 'c' |> upcaseChar"
+             , "  | ^^^ not a function"
              ])
 
     it "points an ambiguous top-level type (from elaboration) at the expression" $

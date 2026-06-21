@@ -89,10 +89,18 @@ unify sp a b = case (a, b) of
     pure (s2 `composeS` s1)
   (TyVar n, t) -> bindVar sp n t
   (t, TyVar n) -> bindVar sp n t
+  -- A function was required but the other side is a concrete non-function
+  -- e.g. `'c' |> upcaseChar`, since |> is composition and wants functions on both sides.
+  (TyArr _ _, _) -> notAFunction sp b
+  (_, TyArr _ _) -> notAFunction sp a
   _ -> failAt sp
          ("type mismatch: cannot unify " ++ prettyUType a
             ++ " with " ++ prettyUType b)
          "mismatched types"
+
+notAFunction :: Span -> UType -> Infer Subst
+notAFunction sp t =
+  failAt sp ("expected a function, but got " ++ prettyUType t) "not a function"
 
 bindVar :: Span -> TVar -> UType -> Infer Subst
 bindVar _ n (TyVar m) | n == m = pure emptySubst
