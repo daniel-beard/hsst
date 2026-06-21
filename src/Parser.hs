@@ -61,17 +61,28 @@ intLitSpan = spanned (L.signed (pure ()) L.decimal)
 stringLitSpan :: Parser (Span, String)
 stringLitSpan = spanned $ do
   void (char '"')
-  cs <- many (escape <|> noneOf ("\"\\" :: String))
+  cs <- many (escape "\"" <|> noneOf ("\"\\" :: String))
   void (char '"')
   pure cs
-  where
-    escape = char '\\' *> choice
-      [ '\n' <$ char 'n'
-      , '\t' <$ char 't'
-      , '\r' <$ char 'r'
-      , '\\' <$ char '\\'
-      , '"'  <$ char '"'
-      ]
+
+charLitSpan :: Parser (Span, Char)
+charLitSpan = spanned $ do
+  void (char '\'')
+  c <- escape "'" <|> noneOf ("'\\" :: String)
+  void (char '\'')
+  pure c
+
+-- Backslash escapes shared by string and char literals. `extra` is the
+-- delimiter that also needs escaping (`"` in strings, `'` in chars).
+escape :: String -> Parser Char
+escape extra = char '\\' *> choice
+  ( [ '\n' <$ char 'n'
+    , '\t' <$ char 't'
+    , '\r' <$ char 'r'
+    , '\\' <$ char '\\'
+    ]
+    ++ [ d <$ char d | d <- extra ]
+  )
 
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
@@ -116,6 +127,7 @@ atom = choice
   [ lambda
   , letBinding
   , (\(sp, s) -> UStr  sp s) <$> stringLitSpan
+  , (\(sp, c) -> UChar sp c) <$> charLitSpan
   , (\(sp, n) -> UInt  sp n) <$> intLitSpan
   , (\(sp, b) -> UBool sp b) <$> boolLitSpan
   , (\(sp, x) -> UVar  sp x) <$> identifierSpan

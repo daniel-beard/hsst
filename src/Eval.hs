@@ -25,6 +25,7 @@ eval :: Env g -> Term g t -> t
 eval env e = case e of
   TVar v        -> lookupEnv v env
   TStr s        -> s
+  TChar c       -> c
   TInt n        -> n
   TBool b       -> b
   TLam _ body   -> \x -> eval (ECons x env) body
@@ -36,8 +37,9 @@ eval env e = case e of
 -- applied to anything) get a placeholder.
 render :: Ty t -> t -> String
 render ty x = case ty of
-  TyStr        -> show x
-  TyIntT       -> show x
-  TyBoolT      -> if x then "true" else "false"
-  TyListT a    -> "[" ++ intercalate "," (map (render a) x) ++ "]"
-  TyArrT _ _   -> "<function : " ++ showTy ty ++ ">"
+  TyCharT          -> show x
+  TyIntT           -> show x
+  TyBoolT          -> if x then "true" else "false"
+  TyListT TyCharT  -> show x
+  TyListT a        -> "[" ++ intercalate "," (map (render a) x) ++ "]"
+  TyArrT _ _       -> "<function : " ++ showTy ty ++ ">"

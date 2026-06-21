@@ -11,8 +11,9 @@ where
 
 import Core
 import qualified Data.ByteString.Base64 as B64
-import qualified Data.ByteString.Char8 as BSC
 import Data.Char (toLower, toUpper)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Type.Equality ((:~:) (Refl))
@@ -68,21 +69,22 @@ prims =
     Prim
       "tee"
       (Scheme [a] $ TyVar a `TyArr` TyVar a) implTee,
-    -- String <-> [String]
-    monoPrim "words"      (TyStr `TyArrT` (TyListT TyStr)) words,
-    monoPrim "unwords"    ((TyListT TyStr) `TyArrT` TyStr) unwords,
-    monoPrim "lines"      (TyStr `TyArrT` (TyListT TyStr)) lines,
-    monoPrim "unlines"    ((TyListT TyStr) `TyArrT` TyStr) unlines,
+    -- String <-> [String]. A String is [Char]. The polymorphic list ops below also apply.
+    monoPrim "words"      (tyStr `TyArrT` (TyListT tyStr)) words,
+    monoPrim "unwords"    ((TyListT tyStr) `TyArrT` tyStr) unwords,
+    monoPrim "lines"      (tyStr `TyArrT` (TyListT tyStr)) lines,
+    monoPrim "unlines"    ((TyListT tyStr) `TyArrT` tyStr) unlines,
     -- Scalar string ops
-    monoPrim "uppercase"  (TyStr `TyArrT` TyStr) (map toUpper),
-    monoPrim "lowercase"  (TyStr `TyArrT` TyStr) (map toLower),
-    monoPrim "base64"     (TyStr `TyArrT` TyStr) b64encode,
-    monoPrim "unbase64"   (TyStr `TyArrT` TyStr) b64decode,
-    monoPrim "reverse_s"  (TyStr `TyArrT` TyStr) reverse,
-    monoPrim "strlen"     (TyStr `TyArrT` TyIntT) length,
-    -- List ops (polymorphic)
+    monoPrim "uppercase"  (tyStr `TyArrT` tyStr) (map toUpper),
+    monoPrim "lowercase"  (tyStr `TyArrT` tyStr) (map toLower),
+    -- Char ops -- pair these with map/filter to work per character
+    monoPrim "upcaseChar"   (TyCharT `TyArrT` TyCharT) toUpper,
+    monoPrim "downcaseChar" (TyCharT `TyArrT` TyCharT) toLower,
+    monoPrim "base64"     (tyStr `TyArrT` tyStr) b64encode,
+    monoPrim "unbase64"   (tyStr `TyArrT` tyStr) b64decode,
     Prim
       "take"
+      -- Int -> [a] -> [a]
       (Scheme [a] $ TyInt `TyArr` (TyList (TyVar a) `TyArr` TyList (TyVar a)))
       implTake,
     Prim
@@ -112,8 +114,10 @@ prims =
       )
       implFilter,
     -- Int ops
-    --TODO: Change these, they are currently standalone plus(2, 3)
-    -- but I want these to use partial application instead: `42 |> plus(2)`
+    -- These are curried, so partial application already works: plus(2, 3),
+    -- plus(2)(3), and `length |> plus(2)` (compose of [a]->Int and
+    -- Int->Int) all work. `4 |> plus(2)` does NOT, because `|>` is function
+    -- composition, not a value pipe -- 4 is a value, not a function.
     monoPrim "plus" (TyArrT TyIntT (TyArrT TyIntT TyIntT)) (+),
     monoPrim "minus" (TyArrT TyIntT (TyArrT TyIntT TyIntT)) (-),
     -- Bool ops
@@ -135,11 +139,11 @@ lookupImpl name reqTy = go prims
       | otherwise = go rest
 
 b64encode :: String -> String
-b64encode = BSC.unpack . B64.encode . BSC.pack
+b64encode = T.unpack . TE.decodeUtf8 . B64.encode . TE.encodeUtf8 . T.pack
 
 b64decode :: String -> String
-b64decode s = case B64.decode (BSC.pack s) of
-  Right bs -> BSC.unpack bs
+b64decode s = case B64.decode (TE.encodeUtf8 (T.pack s)) of
+  Right bs -> T.unpack (TE.decodeUtf8 bs)
   Left e   -> error $ "unbase64: " ++ e
 
 -- Polymorphic-prim dispatchers. Each pattern-matches the requested Ty

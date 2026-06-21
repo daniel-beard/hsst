@@ -25,6 +25,7 @@ resolve prims = go []
             , diagLabel   = "not found in scope"
             }
     go _   (UStr sp s)  = Right (IStr sp s)
+    go _   (UChar sp c) = Right (IChar sp c)
     go _   (UInt sp n)  = Right (IInt sp n)
     go _   (UBool sp b) = Right (IBool sp b)
     go ctx (UApp f a) = do

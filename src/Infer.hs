@@ -4,7 +4,7 @@ module Infer
   , inferProgram
   ) where
 
-import Control.Monad.Except (Except, runExcept, throwError)
+import Control.Monad.Except (Except, runExcept, throwError, catchError)
 import Control.Monad.State.Strict (StateT, evalStateT, get, put)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -43,6 +43,7 @@ applyAnn s = go
       AApp  sp f a  -> AApp sp (go f) (go a)
       ALam  sp bt b -> ALam sp (applyTy s bt) (go b)
       AStr  _ _     -> t
+      AChar _ _     -> t
       AInt  _ _     -> t
       ABool _ _     -> t
 
@@ -78,7 +79,7 @@ failAt sp msg lbl =
 -- expression that caused it (in practice, an application's argument).
 unify :: Span -> UType -> UType -> Infer Subst
 unify sp a b = case (a, b) of
-  (TyString, TyString) -> pure emptySubst
+  (TyChar,   TyChar)   -> pure emptySubst
   (TyInt,    TyInt)    -> pure emptySubst
   (TyBool,   TyBool)   -> pure emptySubst
   (TyList x, TyList y) -> unify sp x y
@@ -120,6 +121,7 @@ elimLets t = case t of
   IVar  _ _    -> t
   IPrim _ _    -> t
   IStr  _ _    -> t
+  IChar _ _    -> t
   IInt  _ _    -> t
   IBool _ _    -> t
 
@@ -128,7 +130,8 @@ elimLets t = case t of
 -- Returns (subst, type, annotated-term).
 infer :: PrimEnv -> [UType] -> IxTerm -> Infer (Subst, UType, AnnTerm)
 infer prims ctx e = case e of
-  IStr  sp v -> pure (emptySubst, TyString, AStr sp v)
+  IStr  sp v -> pure (emptySubst, TyList TyChar, AStr sp v)
+  IChar sp v -> pure (emptySubst, TyChar,   AChar sp v)
   IInt  sp v -> pure (emptySubst, TyInt,    AInt sp v)
   IBool sp v -> pure (emptySubst, TyBool,   ABool sp v)
 
@@ -167,7 +170,20 @@ infer prims ctx e = case e of
 
 inferProgram :: PrimEnv -> IxTerm -> Either Diagnostic AnnTerm
 inferProgram prims t0 =
-  let t = elimLets t0
-  in case runExcept (evalStateT (infer prims [] t) (Fresh 1000)) of
-    Left err           -> Left err
-    Right (s, _ty, ann) -> Right (applyAnn s ann)
+  runExcept (evalStateT go (Fresh 1000))
+  where
+    go = do
+      (s, ty, ann) <- infer prims [] (elimLets t0)
+      -- The program is run as a filter over stdin, which is always a String.
+      -- So if the whole program is a function whose input is still
+      -- unconstrained, default that input to String. This lets a bare
+      -- polymorphic list op (reverse, length, take, ...) run directly on
+      -- stdin. If the input cannot be a String (e.g. Int -> Int), leave it:
+      -- the value renders as a function instead.
+      sIn <- defaultStdin (applyTy s ty)
+      pure (applyAnn (sIn `composeS` s) ann)
+
+    defaultStdin ty = case ty of
+      TyArr dom _ ->
+        unify noSpan dom (TyList TyChar) `catchError` \_ -> pure emptySubst
+      _ -> pure emptySubst

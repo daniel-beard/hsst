@@ -9,6 +9,7 @@ module Core
     Var (..),
     Typed (..),
     ExType (..),
+    tyStr,
     cmpTy,
     reifyTy,
     tyToUType,
@@ -22,7 +23,7 @@ import Syntax (UType (..), prettyUType)
 -- Strongly-typed types. Each constructor's parameter index is a real Haskell
 -- type, so a `Ty t` is a singleton witness for `t`.
 data Ty t where
-  TyStr   :: Ty String
+  TyCharT :: Ty Char
   TyIntT  :: Ty Int
   TyBoolT :: Ty Bool
   -- [a]
@@ -31,6 +32,10 @@ data Ty t where
   TyArrT  :: Ty a -> Ty b -> Ty (a -> b)
 
 deriving instance Show (Ty t)
+
+-- The string type: [Char]. List operations work on these, like `length`
+tyStr :: Ty String
+tyStr = TyListT TyCharT
 
 -- de Bruijn index, type-aware.
 data Var g t where
@@ -44,6 +49,7 @@ data Term g t where
   TLam  :: Ty a -> Term (g, a) b -> Term g (a -> b)
   TApp  :: Term g (a -> b) -> Term g a -> Term g b
   TStr  :: String -> Term g String
+  TChar :: Char -> Term g Char
   TInt  :: Int -> Term g Int
   TBool :: Bool -> Term g Bool
   -- Primitives are opaque Haskell values of the right type.
@@ -55,7 +61,7 @@ data Typed thing = forall t. Typed (Ty t) (thing t)
 data ExType = forall t. ExType (Ty t)
 
 cmpTy :: Ty a -> Ty b -> Maybe (a :~: b)
-cmpTy TyStr TyStr     = Just Refl
+cmpTy TyCharT TyCharT = Just Refl
 cmpTy TyIntT TyIntT   = Just Refl
 cmpTy TyBoolT TyBoolT = Just Refl
 cmpTy (TyListT a) (TyListT b) = do
@@ -71,7 +77,7 @@ cmpTy _ _ = Nothing
 -- This is the bridge from inference's untyped UType to the GADT.
 reifyTy :: UType -> Either String ExType
 reifyTy ut = case ut of
-  TyString  -> Right (ExType TyStr)
+  TyChar    -> Right (ExType TyCharT)
   TyInt     -> Right (ExType TyIntT)
   TyBool    -> Right (ExType TyBoolT)
   TyList a  -> do
@@ -94,7 +100,7 @@ reifyTy ut = case ut of
 -- `Ty`) and derive its inference Scheme from it.
 tyToUType :: Ty t -> UType
 tyToUType t = case t of
-  TyStr      -> TyString
+  TyCharT    -> TyChar
   TyIntT     -> TyInt
   TyBoolT    -> TyBool
   TyListT a  -> TyList (tyToUType a)

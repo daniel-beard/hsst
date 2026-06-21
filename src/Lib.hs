@@ -24,7 +24,7 @@ runProgram src stdin_ = do
   Typed ty term <- first (renderDiagnostic src) (elaborateClosed ann)
   case ty of
     -- If the program is a String -> a, feed it stdin.
-    TyArrT TyStr ret ->
+    TyArrT (TyListT TyCharT) ret ->
       let f = eval ENil term
       in pure (render ret (f stdin_))
     -- Otherwise print as-is.

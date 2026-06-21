@@ -162,6 +162,8 @@ test-suite hsst-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      ProgramSpec
+      StringSpec
       Paths_hsst
   autogen-modules:
       Paths_hsst
@@ -209,6 +211,8 @@ test-suite hsst-test
       TypeSynonymInstances
       ViewPatterns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-tool-depends:
+      hspec-discover:hspec-discover
   build-depends:
       base >=4.11 && <10
     , base64-bytestring

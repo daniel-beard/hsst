@@ -49,7 +49,8 @@ lookupVar sp n (TyCons _  rest) = do
 -- here points back at the source.
 elaborate :: TyEnv g -> AnnTerm -> Either Diagnostic (Typed (Term g))
 elaborate env e = case e of
-  AStr  _ v -> Right (Typed TyStr   (TStr v))
+  AStr  _ v -> Right (Typed tyStr   (TStr v))
+  AChar _ v -> Right (Typed TyCharT (TChar v))
   AInt  _ v -> Right (Typed TyIntT  (TInt v))
   ABool _ v -> Right (Typed TyBoolT (TBool v))
 
