@@ -23,7 +23,7 @@ echo "hello world" | hsst "words |> map(uppercase) |> take(1)"
 
 ## Errors
 
-The goal is to have rustc style errors. Current implementation contains this for unbound variable errors:
+Rust-c style errors that point to the exact source span that caused the issue:
 
 ```
   error: unbound variable: mp
@@ -33,12 +33,17 @@ The goal is to have rustc style errors. Current implementation contains this for
     |          ^^ not found in scope
 ```
 
-but nothing else just yet. See TODOs below.
+```
+> hsst "'c' |> upcaseChar"
+error: expected a function, but got Char; |> composes functions -- use & to apply a value to a function
+ --> <arg>:1:5
+  |
+1 | 'c' |> upcaseChar
+  |     ^^ did you mean & ?
+```
 
 ## TODOs
 
-- [ ] Thread span info through Infer and Elaborate to get nice errors with loc info for type errors.
 - [ ] Many more tests
 - [ ] More Prims
 - [ ] Eventual rank-2 polymorphism (maybe adhoc polymorphism as well?)
-- [ ] Consider representing String as [Char] or something like it, would allow `reverse` etc to apply over String and [String] without need for adhoc polymorphism
