@@ -12,7 +12,7 @@ import Data.Type.Equality ((:~:)(Refl))
 import Syntax
 import Core
 import Diagnostics (Span, Diagnostic(..))
-import qualified Prims as Prims
+import Prims 
 
 -- An "internal" error: a soundness bug in an earlier pass, not a user mistake.
 -- Still given a span so it lands somewhere useful if it ever fires.

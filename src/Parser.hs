@@ -133,11 +133,11 @@ atom :: Parser UTerm
 atom = choice
   [ lambda
   , letBinding
-  , (\(sp, s) -> UStr  sp s) <$> stringLitSpan
-  , (\(sp, c) -> UChar sp c) <$> charLitSpan
-  , (\(sp, n) -> UInt  sp n) <$> intLitSpan
-  , (\(sp, b) -> UBool sp b) <$> boolLitSpan
-  , (\(sp, x) -> UVar  sp x) <$> identifierSpan
+  , uncurry UStr  <$> stringLitSpan
+  , uncurry UChar <$> charLitSpan
+  , uncurry UInt  <$> intLitSpan
+  , uncurry UBool <$> boolLitSpan
+  , uncurry UVar  <$> identifierSpan
   , parens expr
   ]
 
@@ -160,5 +160,4 @@ letBinding = do
   _  <- symbol "="
   e1 <- expr
   reserved "in"
-  e2 <- expr
-  pure (ULet x e1 e2)
+  ULet x e1 <$> expr
