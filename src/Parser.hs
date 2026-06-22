@@ -75,6 +75,20 @@ charLitSpan = spanned $ do
   void (char '\'')
   pure c
 
+-- Regex literal: `/{body}/`. 
+-- No escape handling like strings except for `\/` (literal slash).
+regexLitSpan :: Parser (Span, String)
+regexLitSpan = spanned $ do
+  void (char '/')
+  cs <- many regexChar
+  void (char '/')
+  pure (concat cs)
+  where
+    regexChar =
+          "/"               <$  try (char '\\' *> char '/')  -- `\/` -> literal `/`
+      <|> (\b -> ['\\', b]) <$> (char '\\' *> anySingle)     -- keep any other `\x`
+      <|> (\c -> [c])       <$> noneOf ("/\\" :: String)
+
 -- Backslash escapes shared by string and char literals. `extra` is the
 -- delimiter that also needs escaping (`"` in strings, `'` in chars).
 escape :: String -> Parser Char
@@ -133,7 +147,8 @@ atom :: Parser UTerm
 atom = choice
   [ lambda
   , letBinding
-  , uncurry UStr  <$> stringLitSpan
+  , uncurry UStr   <$> stringLitSpan
+  , uncurry URegex <$> regexLitSpan
   , uncurry UChar <$> charLitSpan
   , uncurry UInt  <$> intLitSpan
   , uncurry UBool <$> boolLitSpan

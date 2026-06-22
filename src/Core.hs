@@ -18,18 +18,21 @@ module Core
 where
 
 import Data.Type.Equality ((:~:) (Refl))
+import Text.Regex.PCRE (Regex)
 import Syntax (UType (..), prettyUType)
 
 -- Strongly-typed types. Each constructor's parameter index is a real Haskell
 -- type, so a `Ty t` is a singleton witness for `t`.
 data Ty t where
-  TyCharT :: Ty Char
-  TyIntT  :: Ty Int
-  TyBoolT :: Ty Bool
+  TyCharT  :: Ty Char
+  TyIntT   :: Ty Int
+  TyBoolT  :: Ty Bool
+  -- A compiled PCRE regex.
+  TyRegexT :: Ty Regex
   -- [a]
-  TyListT :: Ty a -> Ty [a]
+  TyListT  :: Ty a -> Ty [a]
   -- a -> b
-  TyArrT  :: Ty a -> Ty b -> Ty (a -> b)
+  TyArrT   :: Ty a -> Ty b -> Ty (a -> b)
 
 deriving instance Show (Ty t)
 
@@ -48,10 +51,11 @@ data Term g t where
   TVar  :: Var g t -> Term g t
   TLam  :: Ty a -> Term (g, a) b -> Term g (a -> b)
   TApp  :: Term g (a -> b) -> Term g a -> Term g b
-  TStr  :: String -> Term g String
-  TChar :: Char -> Term g Char
-  TInt  :: Int -> Term g Int
-  TBool :: Bool -> Term g Bool
+  TStr   :: String -> Term g String
+  TRegex :: Regex -> Term g Regex
+  TChar  :: Char -> Term g Char
+  TInt   :: Int -> Term g Int
+  TBool  :: Bool -> Term g Bool
   -- Primitives are opaque Haskell values of the right type.
   TPrim :: String -> Ty t -> t -> Term g t
 
@@ -61,9 +65,10 @@ data Typed thing = forall t. Typed (Ty t) (thing t)
 data ExType = forall t. ExType (Ty t)
 
 cmpTy :: Ty a -> Ty b -> Maybe (a :~: b)
-cmpTy TyCharT TyCharT = Just Refl
-cmpTy TyIntT TyIntT   = Just Refl
-cmpTy TyBoolT TyBoolT = Just Refl
+cmpTy TyCharT TyCharT   = Just Refl
+cmpTy TyIntT TyIntT     = Just Refl
+cmpTy TyBoolT TyBoolT   = Just Refl
+cmpTy TyRegexT TyRegexT = Just Refl
 cmpTy (TyListT a) (TyListT b) = do
   Refl <- cmpTy a b
   pure Refl
@@ -80,6 +85,7 @@ reifyTy ut = case ut of
   TyChar    -> Right (ExType TyCharT)
   TyInt     -> Right (ExType TyIntT)
   TyBool    -> Right (ExType TyBoolT)
+  TyRegex   -> Right (ExType TyRegexT)
   TyList a  -> do
     ExType a' <- reifyTy a
     Right (ExType (TyListT a'))
@@ -103,6 +109,7 @@ tyToUType t = case t of
   TyCharT    -> TyChar
   TyIntT     -> TyInt
   TyBoolT    -> TyBool
+  TyRegexT   -> TyRegex
   TyListT a  -> TyList (tyToUType a)
   TyArrT a b -> TyArr (tyToUType a) (tyToUType b)
 

@@ -42,7 +42,8 @@ applyAnn s = go
       APrim sp n ty -> APrim sp n (applyTy s ty)
       AApp  sp f a  -> AApp sp (go f) (go a)
       ALam  sp bt b -> ALam sp (applyTy s bt) (go b)
-      AStr  _ _     -> t
+      AStr   _ _    -> t
+      ARegex _ _    -> t
       AChar _ _     -> t
       AInt  _ _     -> t
       ABool _ _     -> t
@@ -82,6 +83,7 @@ unify sp a b = case (a, b) of
   (TyChar,   TyChar)   -> pure emptySubst
   (TyInt,    TyInt)    -> pure emptySubst
   (TyBool,   TyBool)   -> pure emptySubst
+  (TyRegex,  TyRegex)  -> pure emptySubst
   (TyList x, TyList y) -> unify sp x y
   (TyArr l1 r1, TyArr l2 r2) -> do
     s1 <- unify sp l1 l2
@@ -134,19 +136,21 @@ elimLets t = case t of
   ILet _ e1 e2 -> elimLets (substIx 0 (elimLets e1) e2)
   IApp sp f a  -> IApp sp (elimLets f) (elimLets a)
   ILam sp b    -> ILam sp (elimLets b)
-  IVar  _ _    -> t
-  IPrim _ _    -> t
-  IStr  _ _    -> t
-  IChar _ _    -> t
-  IInt  _ _    -> t
-  IBool _ _    -> t
+  IVar   _ _   -> t
+  IPrim  _ _   -> t
+  IStr   _ _   -> t
+  IRegex _ _   -> t
+  IChar  _ _   -> t
+  IInt   _ _   -> t
+  IBool  _ _   -> t
 
 -- Algorithm W over a let-free IxTerm.
 -- The local context is a stack of monomorphic types for lambda binders.
 -- Returns (subst, type, annotated-term).
 infer :: PrimEnv -> [UType] -> IxTerm -> Infer (Subst, UType, AnnTerm)
 infer prims ctx e = case e of
-  IStr  sp v -> pure (emptySubst, TyList TyChar, AStr sp v)
+  IStr   sp v -> pure (emptySubst, TyList TyChar, AStr sp v)
+  IRegex sp v -> pure (emptySubst, TyRegex,  ARegex sp v)
   IChar sp v -> pure (emptySubst, TyChar,   AChar sp v)
   IInt  sp v -> pure (emptySubst, TyInt,    AInt sp v)
   IBool sp v -> pure (emptySubst, TyBool,   ABool sp v)

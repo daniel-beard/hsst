@@ -33,6 +33,7 @@ library
       Lib
       Parser
       Prims
+      RegexCompile
       Resolve
       Syntax
   other-modules:
@@ -91,6 +92,7 @@ library
     , megaparsec
     , mtl
     , parser-combinators
+    , regex-pcre
     , text
     , vector
   default-language: Haskell2010
@@ -155,6 +157,7 @@ executable hsst
     , mtl
     , parser-combinators
     , process
+    , regex-pcre
     , text
     , vector
   default-language: Haskell2010
@@ -164,6 +167,7 @@ test-suite hsst-test
   main-is: Spec.hs
   other-modules:
       ProgramSpec
+      RegexSpec
       StringSpec
       Paths_hsst
   autogen-modules:
@@ -224,6 +228,7 @@ test-suite hsst-test
     , megaparsec
     , mtl
     , parser-combinators
+    , regex-pcre
     , text
     , vector
   default-language: Haskell2010

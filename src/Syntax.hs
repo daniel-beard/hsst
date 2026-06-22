@@ -33,6 +33,7 @@ data UType
   | TyChar
   | TyInt
   | TyBool
+  | TyRegex
   | TyList UType
   | TyArr UType UType
   deriving (Eq, Show)
@@ -46,10 +47,11 @@ data UTerm
   | ULam  Name  UTerm
   | UApp  UTerm UTerm
   | ULet  Name  UTerm  UTerm
-  | UStr  Span  String
-  | UChar Span  Char
-  | UInt  Span  Int
-  | UBool Span  Bool
+  | UStr   Span  String
+  | URegex Span  String -- raw pattern text
+  | UChar  Span  Char
+  | UInt   Span  Int
+  | UBool  Span  Bool
   deriving (Eq, Show)
 
 -- de Bruijn AST. Variables are indices; primitives are referenced by name
@@ -63,24 +65,26 @@ data IxTerm
   | IApp  Span IxTerm IxTerm
   | ILam  Span IxTerm
   | ILet  Span IxTerm IxTerm
-  | IStr  Span String
-  | IChar Span Char
-  | IInt  Span Int
-  | IBool Span Bool
+  | IStr   Span String
+  | IRegex Span String -- raw pattern text, compiled later. See `Elaborate.hs`
+  | IChar  Span Char
+  | IInt   Span Int
+  | IBool  Span Bool
   deriving (Eq, Show)
 
 -- The span an IxTerm was resolved from.
 ixSpan :: IxTerm -> Span
 ixSpan t = case t of
-  IVar  sp _   -> sp
-  IPrim sp _   -> sp
-  IApp  sp _ _ -> sp
-  ILam  sp _   -> sp
-  ILet  sp _ _ -> sp
-  IStr  sp _   -> sp
-  IChar sp _   -> sp
-  IInt  sp _   -> sp
-  IBool sp _   -> sp
+  IVar   sp _   -> sp
+  IPrim  sp _   -> sp
+  IApp   sp _ _ -> sp
+  ILam   sp _   -> sp
+  ILet   sp _ _ -> sp
+  IStr   sp _   -> sp
+  IRegex sp _   -> sp
+  IChar  sp _   -> sp
+  IInt   sp _   -> sp
+  IBool  sp _   -> sp
 
 -- Shift all free indices >= cutoff by d.
 shiftIx :: Int -> Int -> IxTerm -> IxTerm
@@ -92,6 +96,7 @@ shiftIx d = go
         | otherwise -> t
       IPrim _ _   -> t
       IStr _ _    -> t
+      IRegex _ _  -> t
       IChar _ _   -> t
       IInt _ _    -> t
       IBool _ _   -> t
@@ -112,6 +117,7 @@ substIx k0 s0 = go k0 s0
         | otherwise -> t
       IPrim _ _   -> t
       IStr _ _    -> t
+      IRegex _ _  -> t
       IChar _ _   -> t
       IInt _ _    -> t
       IBool _ _   -> t
@@ -126,6 +132,7 @@ prettyUType = go (0 :: Int)
     go _ TyChar          = "Char"
     go _ TyInt           = "Int"
     go _ TyBool          = "Bool"
+    go _ TyRegex         = "Regex"
     go _ (TyList TyChar) = "String"
     go _ (TyList t)      = "[" ++ go 0 t ++ "]"
     go p (TyArr a b) =
@@ -138,6 +145,7 @@ prettyUTerm = go (0 :: Int)
     paren p s           = if p > 0 then "(" ++ s ++ ")" else s
     go _ (UVar _ x)     = x
     go _ (UStr _ s)     = show s
+    go _ (URegex _ s)   = "/" ++ s ++ "/"
     go _ (UChar _ c)    = show c
     go _ (UInt _ n)     = show n
     go _ (UBool _ b)    = if b then "true" else "false"
@@ -153,34 +161,37 @@ prettyUTerm = go (0 :: Int)
 data AnnTerm
   = AVar  Span Int     UType
   | APrim Span Name    UType
-  | AApp  Span AnnTerm AnnTerm
-  | ALam  Span UType   AnnTerm -- binder type, body
-  | AStr  Span String
-  | AChar Span Char
-  | AInt  Span Int
-  | ABool Span Bool
+  | AApp   Span AnnTerm AnnTerm
+  | ALam   Span UType   AnnTerm -- binder type, body
+  | AStr   Span String
+  | ARegex Span String -- raw pattern text
+  | AChar  Span Char
+  | AInt   Span Int
+  | ABool  Span Bool
   deriving (Eq, Show)
 
 -- The span an AnnTerm was inferred from.
 annSpan :: AnnTerm -> Span
 annSpan t = case t of
-  AVar  sp _ _ -> sp
-  APrim sp _ _ -> sp
-  AApp  sp _ _ -> sp
-  ALam  sp _ _ -> sp
-  AStr  sp _   -> sp
-  AChar sp _   -> sp
-  AInt  sp _   -> sp
-  ABool sp _   -> sp
+  AVar   sp _ _ -> sp
+  APrim  sp _ _ -> sp
+  AApp   sp _ _ -> sp
+  ALam   sp _ _ -> sp
+  AStr   sp _   -> sp
+  ARegex sp _   -> sp
+  AChar  sp _   -> sp
+  AInt   sp _   -> sp
+  ABool  sp _   -> sp
 
 prettyIxTerm :: IxTerm -> String
 prettyIxTerm = go (0 :: Int)
   where
     paren p s         = if p > 0 then "(" ++ s ++ ")" else s
-    go _ (IVar _ i)   = "#" ++ show i
-    go _ (IPrim _ n)  = n
-    go _ (IStr _ s)   = show s
-    go _ (IChar _ c)  = show c
+    go _ (IVar _ i)    = "#" ++ show i
+    go _ (IPrim _ n)   = n
+    go _ (IStr _ s)    = show s
+    go _ (IRegex _ s)  = "/" ++ s ++ "/"
+    go _ (IChar _ c)   = show c
     go _ (IInt _ n)   = show n
     go _ (IBool _ b)  = if b then "true" else "false"
     go p (ILam _ b)   = paren p ("\\. " ++ go 0 b)
