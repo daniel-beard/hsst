@@ -25,6 +25,7 @@ eval :: Env g -> Term g t -> t
 eval env e = case e of
   TVar v        -> lookupEnv v env
   TStr s        -> s
+  TRegex r      -> r
   TChar c       -> c
   TInt n        -> n
   TBool b       -> b
@@ -40,6 +41,8 @@ render ty x = case ty of
   TyCharT          -> show x
   TyIntT           -> show x
   TyBoolT          -> if x then "true" else "false"
+  --TODO: Better render representation?
+  TyRegexT         -> "<regex>"
   TyListT TyCharT  -> show x
   TyListT a        -> "[" ++ intercalate "," (map (render a) x) ++ "]"
   TyArrT _ _       -> "<function : " ++ showTy ty ++ ">"

@@ -23,6 +23,8 @@ import Syntax
 import System.IO (hFlush, stdout)
 import System.IO.Unsafe (unsafePerformIO)
 
+import Text.Regex.PCRE (Regex, matchTest)
+
 -- Type-variable identifiers used inside primitive schemes. They live in
 -- the same TVar namespace as inference; we just pick small numbers and
 -- let `instantiate` rename them on every use.
@@ -86,6 +88,9 @@ prims =
     monoPrim "downcaseChar" (TyCharT `TyArrT` TyCharT) toLower,
     monoPrim "base64"     (tyStr `TyArrT` tyStr) b64encode,
     monoPrim "unbase64"   (tyStr `TyArrT` tyStr) b64decode,
+    -- Regex ops
+    -- Regex first so a partial application `matches(/foo/)` is a String -> Bool
+    monoPrim "matches" (TyRegexT `TyArrT` (tyStr `TyArrT` TyBoolT)) matchTest,
     Prim
       "take"
       -- Int -> [a] -> [a]

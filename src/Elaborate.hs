@@ -11,8 +11,9 @@ import Data.Type.Equality ((:~:)(Refl))
 
 import Syntax
 import Core
-import Diagnostics (Span, Diagnostic(..))
-import Prims 
+import Diagnostics (Span(..), Diagnostic(..))
+import RegexCompile (compileRegex)
+import Prims
 
 -- An "internal" error: a soundness bug in an earlier pass, not a user mistake.
 -- Still given a span so it lands somewhere useful if it ever fires.
@@ -54,6 +55,16 @@ elaborate env e = case e of
   AInt  _ v -> Right (Typed TyIntT  (TInt v))
   ABool _ v -> Right (Typed TyBoolT (TBool v))
 
+  -- Compile the literal now, invalid regex is a compile error.
+  -- `regexErrSpan` returns the index within the regex that caused the issue.
+  ARegex sp pat -> case compileRegex pat of
+    Right rx       -> Right (Typed TyRegexT (TRegex rx))
+    Left (off, msg) -> Left Diagnostic
+      { diagMessage = "invalid regex: " ++ msg
+      , diagSpan    = regexErrSpan sp off
+      , diagLabel   = "in this pattern"
+      }
+
   AVar sp i ty -> do
     Typed ty' v <- lookupVar sp i env
     -- The annotation should match; cmpTy gives us the runtime witness.
@@ -94,3 +105,12 @@ elaborate env e = case e of
 
 elaborateClosed :: AnnTerm -> Either Diagnostic (Typed (Term ()))
 elaborateClosed = elaborate TyNil
+
+-- Use the error offset that the regex library returned us,
+-- returning a single char Span - starting at the opening `/` + offset.
+-- TODO: This probably doesn't play nice with slash escapes: `\/`
+regexErrSpan :: Span -> Int -> Span
+regexErrSpan (Span s e) off =
+  let lastInside = max s (e - 1)
+      start      = max s (min (s + 1 + off) lastInside)
+   in Span start (min e (start + 1))
