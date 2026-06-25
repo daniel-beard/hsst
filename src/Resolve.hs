@@ -9,9 +9,10 @@ import Syntax
 import Diagnostics (Diagnostic(..), mergeSpan)
 
 -- Convert the named-binder surface AST to de Bruijn form.
--- A name resolves to: (1) a binder if found in the local context, else
--- (2) a primitive if its name is in `prims`, else (3) an error pointing at
--- the offending variable's source span.
+-- A name resolves to:
+-- (1) a binder if found in the local context, else
+-- (2) a primitive if its name is in `prims`, else
+-- (3) an error pointing at the offending variable's source span.
 resolve :: Set Name -> UTerm -> Either Diagnostic IxTerm
 resolve prims = go []
   where

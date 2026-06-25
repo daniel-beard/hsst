@@ -69,19 +69,13 @@ stringLitSpan = spanned $ do
   pure cs
 
 charLitSpan :: Parser (Span, Char)
-charLitSpan = spanned $ do
-  void (char '\'')
-  c <- escape "'" <|> noneOf ("'\\" :: String)
-  void (char '\'')
-  pure c
+charLitSpan = spanned $ char '\'' *> (escape "'" <|> noneOf ("'\\" :: String)) <* char '\''
 
 -- Regex literal: `/{body}/`. 
 -- No escape handling like strings except for `\/` (literal slash).
 regexLitSpan :: Parser (Span, String)
 regexLitSpan = spanned $ do
-  void (char '/')
-  cs <- many regexChar
-  void (char '/')
+  cs <- char '/' *> many regexChar <* char '/'
   pure (concat cs)
   where
     regexChar =
@@ -137,7 +131,7 @@ pipe sp f g = UApp (UApp (UVar sp "|>") f) g
 -- Application: an atom followed by zero or more `(...)` argument lists.
 appExpr :: Parser UTerm
 appExpr = do
-  f    <- atom
+  f     <- atom
   argss <- many (parens (sepBy expr (symbol ",")))
   pure (foldl applyAll f argss)
   where
@@ -149,10 +143,10 @@ atom = choice
   , letBinding
   , uncurry UStr   <$> stringLitSpan
   , uncurry URegex <$> regexLitSpan
-  , uncurry UChar <$> charLitSpan
-  , uncurry UInt  <$> intLitSpan
-  , uncurry UBool <$> boolLitSpan
-  , uncurry UVar  <$> identifierSpan
+  , uncurry UChar  <$> charLitSpan
+  , uncurry UInt   <$> intLitSpan
+  , uncurry UBool  <$> boolLitSpan
+  , uncurry UVar   <$> identifierSpan
   , parens expr
   ]
 
@@ -162,9 +156,7 @@ boolLitSpan = spanned $
 
 lambda :: Parser UTerm
 lambda = do
-  _  <- symbol "\\"
-  xs <- some identifier
-  _  <- symbol "->"
+  xs <- symbol "\\" *> some identifier <* symbol "->"
   e  <- expr
   pure (foldr ULam e xs)
 

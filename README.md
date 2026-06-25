@@ -1,13 +1,29 @@
 # hsst
 
-hsst is a tiny, statically-typed, pipeline-oriented scripting language for transforming text on stdin. 
-You write a single expression that gets fed standard input — e.g. `words |> map(uppercase) |> take(2) |> unwords` — using left-to-right composition (|>), function application (f(a, b)), lambdas (\x -> ...), and let bindings. 
-It ships with a standard library of primitives for strings, lists, ints, and bools (words/lines, uppercase/base64, map/filter/take/reverse,
-  plus/minus, etc.). 
+hsst is a tiny, statically-typed, pipeline-oriented scripting language for transforming text on stdin.
+The standard mode is run as a filter over stdin or pasteboard contents `String -> a`
 
-It's fully type-safe: it runs full Hindley-Milner type inference so you never write type annotations, and it supports let-polymorphism (the same let-bound function can be used at multiple types). 
+- Single expression: `words |> map(uppercase) |> take(2) |> unwords`
+- `|>` is left-to-right composition
+- Function application `f(a, b)` with automatic currying, e.g.
+  - `hsst 'words("a b")'` is equivalent to `echo "a b" | hsst words`
+- Lambdas 
+  - `"ab" & map(\x -> upcaseChar(x))` or `"ab" & map(upcaseChar)`
+- Hindley-Milner type inference
+- Let bindings
+  - Let-polymorphism - the same let bound function can be used on multiple types. 
+    E.g. `echo "a b" | hsst 'let id = \x -> x in id |> words |> id'` (`id` is applied to `String` and `[String]`)
+  - All types are monomorphised during type inference.
 
-Under the hood the pipeline is `parse → resolve to de Bruijn indices → infer → elaborate into a strongly-typed GADT core → evaluate`, where the elaboration step makes the interpreter total by construction — only well-typed programs are even representable, so there are no runtime type errors. If your program has type String -> a it's applied to stdin, otherwise it's just evaluated and printed.
+Under the hood the pipeline is `parse → resolve to de Bruijn indices → infer → elaborate into a GADT core → evaluate` 
+
+## Standard Library / Primitives
+
+⚠️ This is under-documented, and will remain so until the core language design has settled down a bit. It's all very experimental.
+
+A non-complete list of primitives:
+- `Int`, `Bool`, `Char`, `List a`, `String` (actually `[Char]`), `Regex`
+- map/filter/take/reverse
 
 ## Usage examples
 

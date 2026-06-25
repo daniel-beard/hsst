@@ -49,10 +49,9 @@ mono expected impl reqTy = case cmpTy expected reqTy of
   Just Refl -> Just impl
   Nothing   -> Nothing
 
--- Build a monomorphic primitive from a single source of truth: its concrete
--- `Ty`. The inference Scheme is derived from it (no quantified variables),
--- and the dispatcher is `mono` against the same type, so the type is written
--- exactly once.
+-- Build a monomorphic primitive from a single source of truth: its concrete `Ty`. 
+-- The inference Scheme is derived from it (no quantified variables),
+-- and the dispatcher is `mono` against the same type, so the type is written exactly once.
 monoPrim :: forall s. Name -> Ty s -> s -> Prim
 monoPrim name ty impl =
   Prim name (Scheme [] (tyToUType ty)) (mono ty impl)
@@ -98,35 +97,36 @@ prims =
       implTake,
     Prim
       "drop"
+      -- Int -> [a] -> [a]
       (Scheme [a] $ TyInt `TyArr` (TyList (TyVar a) `TyArr` TyList (TyVar a)))
       implDrop,
     Prim
       "length"
+      -- [a] -> Int
       (Scheme [a] $ TyList (TyVar a) `TyArr` TyInt)
       implLength,
     Prim
       "reverse"
+      -- [a] -> [a]
       (Scheme [a] $ TyList (TyVar a) `TyArr` TyList (TyVar a))
       implReverse,
     Prim
       "map"
-      ( Scheme [a, b] $
+      -- (a -> b) -> [a] -> [b]
+      (Scheme [a, b] $
           (TyVar a `TyArr` TyVar b)
             `TyArr` (TyList (TyVar a) `TyArr` TyList (TyVar b))
       )
       implMap,
     Prim
       "filter"
-      ( Scheme [a] $
+      -- (a -> b) -> [a] -> [a]
+      (Scheme [a] $
           (TyVar a `TyArr` TyBool)
             `TyArr` (TyList (TyVar a) `TyArr` TyList (TyVar a))
       )
       implFilter,
     -- Int ops
-    -- These are curried, so partial application already works: plus(2, 3),
-    -- plus(2)(3), and `length |> plus(2)` (compose of [a]->Int and
-    -- Int->Int) all work. `4 |> plus(2)` does NOT, because `|>` is function
-    -- composition, not a value pipe -- 4 is a value, not a function.
     monoPrim "plus" (TyArrT TyIntT (TyArrT TyIntT TyIntT)) (+),
     monoPrim "minus" (TyArrT TyIntT (TyArrT TyIntT TyIntT)) (-),
     -- Bool ops

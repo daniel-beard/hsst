@@ -113,8 +113,6 @@ tyToUType t = case t of
   TyListT a  -> TyList (tyToUType a)
   TyArrT a b -> TyArr (tyToUType a) (tyToUType b)
 
--- Render a GADT type by projecting to UType and reusing the single
--- UType pretty-printer. (Arrows are now precedence-parenthesized rather
--- than always wrapped.)
+-- Render a GADT type by projecting to UType and reusing the single UType pretty-printer.
 showTy :: Ty t -> String
 showTy = prettyUType . tyToUType
