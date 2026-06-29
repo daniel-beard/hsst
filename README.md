@@ -58,8 +58,9 @@ error: expected a function, but got Char; |> composes functions -- use & to appl
   |     ^^ did you mean & ?
 ```
 
-## TODOs
+## Building
 
-- [ ] Many more tests
-- [ ] More Prims
-- [ ] Eventual rank-2 polymorphism (maybe adhoc polymorphism as well?)
+- Requirements
+  - `brew install icu4c@78`
+  - `ln -s /opt/homebrew/opt/icu4c@78/lib/pkgconfig/*.pc /opt/homebrew/lib/pkgconfig/` (so that pkg-config finds the library, it's not linked by default on macOS)
+

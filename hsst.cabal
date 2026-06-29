@@ -94,6 +94,7 @@ library
     , parser-combinators
     , regex-pcre
     , text
+    , text-icu
     , vector
   default-language: Haskell2010
 
@@ -159,6 +160,7 @@ executable hsst
     , process
     , regex-pcre
     , text
+    , text-icu
     , vector
   default-language: Haskell2010
 
@@ -230,5 +232,6 @@ test-suite hsst-test
     , parser-combinators
     , regex-pcre
     , text
+    , text-icu
     , vector
   default-language: Haskell2010
