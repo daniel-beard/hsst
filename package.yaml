@@ -36,6 +36,7 @@ dependencies:
 - parser-combinators
 - regex-pcre
 - text
+- text-icu
 - vector
 
 default-extensions:

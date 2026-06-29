@@ -69,7 +69,14 @@ stringLitSpan = spanned $ do
   pure cs
 
 charLitSpan :: Parser (Span, Char)
-charLitSpan = spanned $ char '\'' *> (escape "'" <|> noneOf ("'\\" :: String)) <* char '\''
+charLitSpan = spanned $ do
+  void (char '\'')
+  c <- escape "'" <|> noneOf ("'\\" :: String)
+  optional (char '\'') >>= \case
+    Just _  -> pure c
+    Nothing -> fail
+      "a Char literal must be a single unicode code point \
+      \multi-code-point graphemes should use a string literal \"..\" instead"
 
 -- Regex literal: `/{body}/`. 
 -- No escape handling like strings except for `\/` (literal slash).

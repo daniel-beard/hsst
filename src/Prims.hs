@@ -1,7 +1,3 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module Prims
   ( primSchemes,
     primNames,
@@ -14,6 +10,7 @@ import qualified Data.ByteString.Base64 as B64
 import Data.Char (toLower, toUpper)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.ICU.Char as ICU
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Type.Equality ((:~:) (Refl))
@@ -22,7 +19,7 @@ import Infer (Scheme (..))
 import Syntax
 import System.IO (hFlush, stdout)
 import System.IO.Unsafe (unsafePerformIO)
-
+import Text.Printf
 import Text.Regex.PCRE (Regex, matchTest)
 
 -- Type-variable identifiers used inside primitive schemes. They live in
@@ -82,9 +79,14 @@ prims =
     -- Scalar string ops
     monoPrim "uppercase"  (tyStr `TyArrT` tyStr) (map toUpper),
     monoPrim "lowercase"  (tyStr `TyArrT` tyStr) (map toLower),
+    monoPrim "inspect"    (tyStr `TyArrT` TyListT tyStr) (map ICU.charName),
     -- Char ops -- pair these with map/filter to work per character
     monoPrim "upcaseChar"   (TyCharT `TyArrT` TyCharT) toUpper,
     monoPrim "downcaseChar" (TyCharT `TyArrT` TyCharT) toLower,
+    -- Unicode character name, e.g. 'a' -> "LATIN SMALL LETTER A".
+    -- "" for unnamed code points.
+    monoPrim "charName"   (TyCharT `TyArrT` tyStr) ICU.charName,
+    monoPrim "codePoint"  (TyCharT `TyArrT` tyStr) (printf "U+%04X"),
     monoPrim "base64"     (tyStr `TyArrT` tyStr) b64encode,
     monoPrim "unbase64"   (tyStr `TyArrT` tyStr) b64decode,
     -- Regex ops
