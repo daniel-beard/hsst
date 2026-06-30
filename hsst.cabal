@@ -30,6 +30,7 @@ library
       Elaborate
       Eval
       Infer
+      Interp
       Lib
       Parser
       Prims
@@ -73,6 +74,7 @@ library
       OverloadedRecordDot
       PartialTypeSignatures
       PatternGuards
+      PatternSynonyms
       PolyKinds
       QuasiQuotes
       RankNTypes
@@ -81,11 +83,13 @@ library
       StandaloneDeriving
       TupleSections
       TypeFamilies
+      TypeOperators
       TypeSynonymInstances
       ViewPatterns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base >=4.11 && <10
+      array
+    , base >=4.11 && <10
     , base64-bytestring
     , bytestring
     , containers
@@ -137,6 +141,7 @@ executable hsst
       OverloadedRecordDot
       PartialTypeSignatures
       PatternGuards
+      PatternSynonyms
       PolyKinds
       QuasiQuotes
       RankNTypes
@@ -145,11 +150,13 @@ executable hsst
       StandaloneDeriving
       TupleSections
       TypeFamilies
+      TypeOperators
       TypeSynonymInstances
       ViewPatterns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.11 && <10
+      array
+    , base >=4.11 && <10
     , base64-bytestring
     , bytestring
     , containers
@@ -207,6 +214,7 @@ test-suite hsst-test
       OverloadedRecordDot
       PartialTypeSignatures
       PatternGuards
+      PatternSynonyms
       PolyKinds
       QuasiQuotes
       RankNTypes
@@ -215,13 +223,15 @@ test-suite hsst-test
       StandaloneDeriving
       TupleSections
       TypeFamilies
+      TypeOperators
       TypeSynonymInstances
       ViewPatterns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-tool-depends:
       hspec-discover:hspec-discover
   build-depends:
-      base >=4.11 && <10
+      array
+    , base >=4.11 && <10
     , base64-bytestring
     , bytestring
     , containers
