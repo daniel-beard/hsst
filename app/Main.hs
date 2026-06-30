@@ -6,7 +6,7 @@ import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr, stdin, hIsTerminalDevice)
 import System.Process (readProcess)
 
-import Lib (runProgram)
+import Lib (runProgramWithLog)
 
 main :: IO ()
 main = do
@@ -17,8 +17,12 @@ main = do
       -- isTty means nothing to read from stdin, use pasteboard contents in that case.
       isTty  <- hIsTerminalDevice stdin
       stdin_ <- if isTty then readPasteboard else getContents
-      case runProgram src stdin_ of
-        Right out -> putStrLn out
+      -- For now, eval is still pure.
+      -- tee's log goes to stderr, program result to stdout
+      case runProgramWithLog src stdin_ of
+        Right (out, logs) -> do
+          mapM_ (hPutStrLn stderr) logs
+          putStrLn out
         Left  err -> hPutStrLn stderr err >> exitFailure
     _ -> do
       hPutStrLn stderr "usage: hsst '<program>'"

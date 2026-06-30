@@ -89,13 +89,13 @@ elaborate env e = case e of
   ALam sp binderUTy body -> do
     ExType bTy <- reifyAt sp binderUTy
     Typed retTy body' <- elaborate (TyCons bTy env) body
-    Right (Typed (TyArrT bTy retTy) (TLam bTy body'))
+    Right (Typed (bTy :-> retTy) (TLam bTy body'))
 
   AApp sp f a -> do
     Typed tF fTerm <- elaborate env f
     Typed tA aTerm <- elaborate env a
     case tF of
-      TyArrT bnd ret -> case cmpTy tA bnd of
+      bnd :-> ret -> case cmpTy tA bnd of
         Just Refl -> Right (Typed ret (TApp fTerm aTerm))
         Nothing   -> internal sp $
           "application argument type " ++ showTy tA

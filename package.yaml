@@ -27,6 +27,7 @@ ghc-options:
 - -Wredundant-constraints
 
 dependencies:
+- array
 - base >= 4.11 && < 10
 - base64-bytestring
 - bytestring
@@ -70,6 +71,7 @@ default-extensions:
 - OverloadedRecordDot
 - PartialTypeSignatures
 - PatternGuards
+- PatternSynonyms
 - PolyKinds
 - QuasiQuotes
 - RankNTypes
@@ -78,6 +80,7 @@ default-extensions:
 - StandaloneDeriving
 - TupleSections
 - TypeFamilies
+- TypeOperators
 - TypeSynonymInstances
 - ViewPatterns
 
