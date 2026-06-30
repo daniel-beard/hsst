@@ -86,3 +86,17 @@ spec = do
 
     it "works as a stdin filter via partial application" $
       runProgram "matches(/^h/)" "hello" `shouldBe` Right "true"
+
+
+  describe "match / group" $ do
+    it "returns the whole match (group 0) as a stdin filter" $
+      runProgram "match(/(o\\s)/)" "hello world" `shouldBe` Right "\"o \""
+
+    it "retrieves a capture group recorded by a previous match" $
+      runProgram "match(/(o)(\\s)/) |> group(1)" "hello world" `shouldBe` Right "\"o\""
+
+    it "retrieves the second capture group" $
+      runProgram "match(/(o)(\\s)/) |> group(2)" "hello world" `shouldBe` Right "\" \""
+
+    it "yields empty string for an out-of-range group" $
+      runProgram "match(/o/) |> group(5)" "hello world" `shouldBe` Right "\"\""
