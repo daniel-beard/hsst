@@ -1,5 +1,3 @@
-{-# LANGUAGE GADTs #-}
-
 module Eval
   ( Env(..)
   , eval
@@ -7,11 +5,11 @@ module Eval
   ) where
 
 import Data.List (intercalate)
-
 import Core
+import Interp (Interp)
 
 -- A runtime environment whose shape mirrors the type-level binder stack `g`.
--- Each cons holds a Haskell value of the lambda binder's type.
+-- Each cons holds a runtime value of the lambda binder's type.
 data Env g where
   ENil  :: Env ()
   ECons :: t -> Env g -> Env (g, t)
@@ -20,18 +18,24 @@ lookupEnv :: Var g t -> Env g -> t
 lookupEnv ZVar     (ECons x _)   = x
 lookupEnv (SVar v) (ECons _ xs)  = lookupEnv v xs
 
--- The interpreter. Total because the GADT only admits well-typed terms.
-eval :: Env g -> Term g t -> t
+-- The interpreter. 
+-- Applications sequence effects:
+-- eval the function, eval the argument, then run the kleisli function.
+-- Imposes left-to-right order.
+eval :: Env g -> Term g t -> Interp t
 eval env e = case e of
-  TVar v        -> lookupEnv v env
-  TStr s        -> s
-  TRegex r      -> r
-  TChar c       -> c
-  TInt n        -> n
-  TBool b       -> b
-  TLam _ body   -> \x -> eval (ECons x env) body
-  TApp f a      -> eval env f (eval env a)
-  TPrim _ _ x   -> x
+  TVar v        -> pure (lookupEnv v env)
+  TStr s        -> pure s
+  TRegex r      -> pure r
+  TChar c       -> pure c
+  TInt n        -> pure n
+  TBool b       -> pure b
+  TLam _ body   -> pure (\x -> eval (ECons x env) body)
+  TApp f a      -> do
+    f' <- eval env f
+    a' <- eval env a
+    f' a'
+  TPrim _ _ x   -> pure x
 
 -- Show-style rendering: strings quoted, lists as ["a","b",...], plain
 -- otherwise. Function values (the result of a partial pipeline that wasn't
