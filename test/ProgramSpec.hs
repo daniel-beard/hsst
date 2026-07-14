@@ -44,6 +44,31 @@ spec = do
       runProgram "minus(10, 4)" ""
         `shouldBe` Right "6"
 
+  describe "ad-hoc polymorphism" $ do
+    it "String overload is grapheme-aware" $
+      -- there are two reverse implementations, `String -> String` and `[a] -> [a]`.
+      -- we should always be picking the more specific (less free type vars) option. 
+      -- "café" - The 'e' here is 'e' + U+0301 (multi-code-point grapheme cluster.)
+      -- Grapheme reverse keeps "e\769" together, where an element-wise reverse would come out invalid `"\769efac"`
+      runProgram "reverse" "cafe\769"
+        `shouldBe` Right (show ("e\769fac" :: String))
+
+    it "picks the [a] -> [a] overload when piped a list of strings" $
+      runProgram "words |> reverse" "a b c"
+        `shouldBe` Right "[\"c\",\"b\",\"a\"]"
+
+    it "reports no matching overload when no implementation fits the type" $
+      runProgram "reverse(42)" ""
+        `shouldBe` Left
+          --TODO: I need better way not to have to include the unmatched type-var in these...
+          (unlines
+             [ "error: no implementation of reverse for type Int -> String -> t1002"
+             , " --> <arg>:1:1"
+             , "  |"
+             , "1 | reverse(42)"
+             , "  | ^^^^^^^ no matching overload"
+             ])
+
   describe "diagnostics" $ do
     it "renders an unbound variable with a rustc-like error format" $
       runProgram "words |> foo" ""

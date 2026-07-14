@@ -4,8 +4,11 @@ module Infer
   , inferProgram
   ) where
 
+import Control.Monad (foldM)
 import Control.Monad.Except (Except, runExcept, throwError, catchError)
-import Control.Monad.State.Strict (StateT, evalStateT, get, put)
+import Control.Monad.State.Strict (StateT, evalStateT, get, put, gets, modify)
+import Data.List (sortOn)
+import Data.Maybe (catMaybes)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.Map.Strict (Map)
@@ -13,13 +16,16 @@ import Data.Set (Set)
 
 import Syntax
 import Diagnostics (Span, Diagnostic(..), noSpan)
+import qualified Syntax as Defer
 
 -- A type scheme: forall vars. ty.
 data Scheme = Scheme [TVar] UType
   deriving (Eq, Show)
 
--- The environment of primitives, keyed by name.
-type PrimEnv = Map Name Scheme
+-- Primitives from name to list of schemes.
+-- Single scheme: Ordinary monomorphising
+-- Multiple schemes: We figure out overloads below.
+type PrimEnv = Map Name [Scheme]
 
 -- Substitution from type variables to monomorphic types.
 type Subst = Map TVar UType
@@ -59,16 +65,32 @@ ftvTy t = case t of
   TyList a  -> ftvTy a
   _         -> Set.empty
 
--- Inference monad: fresh type-var supply + errors.
-newtype Fresh = Fresh { nextTy :: TVar }
+-- Deferred overloads.
+-- `ovTy` is a fresh type var - regular inference constrains this.
+-- Once substitution is done, pick the scheme that matches best via `resolveOverloads`
+data Overload = Overload
+  { ovName  :: Name     -- prim name
+  , ovTy    :: UType    -- the fresh type var assigned to this occurrence
+  , ovSpan  :: Span     -- source span
+  , ovCands :: [Scheme] -- the candidate schemes for this name
+  }
 
-type Infer a = StateT Fresh (Except Diagnostic) a
+-- Inference monad: fresh type-var supply, pending overloads, and errors.
+data InferS = InferS
+  { isNextTy    :: TVar
+  , isOverloads :: [Overload]
+  }
+
+type Infer a = StateT InferS (Except Diagnostic) a
 
 freshTy :: Infer UType
 freshTy = do
-  Fresh n <- get
-  put (Fresh (n + 1))
-  pure (TyVar n)
+  s <- get
+  put s { isNextTy = isNextTy s + 1 }
+  pure (TyVar (isNextTy s))
+
+recordOverload :: Overload -> Infer ()
+recordOverload ov = modify $ \s -> s { isOverloads = ov : isOverloads s }
 
 -- Abort inference with a diagnostic pointing at the given span.
 failAt :: Span -> String -> String -> Infer a
@@ -151,9 +173,9 @@ infer :: PrimEnv -> [UType] -> IxTerm -> Infer (Subst, UType, AnnTerm)
 infer prims ctx e = case e of
   IStr   sp v -> pure (emptySubst, TyList TyChar, AStr sp v)
   IRegex sp v -> pure (emptySubst, TyRegex,  ARegex sp v)
-  IChar sp v -> pure (emptySubst, TyChar,   AChar sp v)
-  IInt  sp v -> pure (emptySubst, TyInt,    AInt sp v)
-  IBool sp v -> pure (emptySubst, TyBool,   ABool sp v)
+  IChar  sp v -> pure (emptySubst, TyChar,   AChar sp v)
+  IInt   sp v -> pure (emptySubst, TyInt,    AInt sp v)
+  IBool  sp v -> pure (emptySubst, TyBool,   ABool sp v)
 
   IVar sp i
     | i < 0 || i >= length ctx ->
@@ -163,10 +185,19 @@ infer prims ctx e = case e of
         in pure (emptySubst, ty, AVar sp i ty)
 
   IPrim sp x -> case Map.lookup x prims of
-    Nothing -> failAt sp ("unknown primitive: " ++ x) "not a known primitive"
-    Just sc -> do
+    Nothing  -> failAt sp ("unknown primitive: " ++ x) "not a known primitive"
+    Just []  -> failAt sp ("unknown primitive: " ++ x) "not a known primitive"
+    -- Single scheme: ordinary monomorphising instantiation
+    Just [sc] -> do
       ty <- instantiate sc
       pure (emptySubst, ty, APrim sp x ty)
+    -- Overloaded prim, assigned a fresh type var.
+    -- Scheme choice is deferred until all substitution is done.
+    -- Annotated type carries the fresh type var, resolved in `resolveOverloads`
+    Just scs -> do
+      tv <- freshTy
+      recordOverload (Overload x tv sp scs)
+      pure (emptySubst, tv, APrim sp x tv)
 
   ILam sp body -> do
     tv <- freshTy
@@ -199,20 +230,89 @@ infer prims ctx e = case e of
 
 inferProgram :: PrimEnv -> IxTerm -> Either Diagnostic AnnTerm
 inferProgram prims t0 =
-  runExcept (evalStateT go (Fresh 1000))
+  runExcept (evalStateT go (InferS 1000 []))
   where
     go = do
       (s, ty, ann) <- infer prims [] (elimLets t0)
-      -- The program is run as a filter over stdin, which is always a String.
-      -- So if the whole program is a function whose input is still
-      -- unconstrained, default that input to String. This lets a bare
-      -- polymorphic list op (reverse, length, take, ...) run directly on
-      -- stdin. If the input cannot be a String (e.g. Int -> Int), leave it:
-      -- the value renders as a function instead.
+      -- Default to stdin filter type (String)
+      -- This allows a polymorphic list prim to run directly on stdin for now.
+      -- Otherwise just render as a function.
       sIn <- defaultStdin (applyTy s ty)
-      pure (applyAnn (sIn `composeS` s) ann)
+      let s1 = sIn `composeS` s
+      -- Resolve any outstanding overloads to concrete schemes
+      ovs <- gets isOverloads
+      s2 <- resolveOverloads s1 ovs
+      pure (applyAnn s2 ann)
 
     defaultStdin ty = case ty of
       TyArr dom _ ->
         unify noSpan dom (TyList TyChar) `catchError` \_ -> pure emptySubst
+      -- Whole program is a bare type var, make it a String filter.
+      TyVar _ -> do
+        b <- freshTy
+        unify noSpan ty (TyArr (TyList TyChar) b) `catchError` \_ -> pure emptySubst
       _ -> pure emptySubst
+
+-- Resolve deferred overloads
+-- Each pass attempts to resolve to a unique, most specific scheme.
+-- Substitutions are carried forward, so that an occurence can resolve another in a future pass.
+-- Stops when:
+-- - Nothing left to resolve
+-- - No progress being made (overload is ambiguous)
+resolveOverloads :: Subst -> [Overload] -> Infer Subst
+resolveOverloads s0 = loop s0
+  where
+    loop subst pending = do
+      (subst', deferred, progressed) <- foldM step (subst, [], False) pending
+      case deferred of
+        []          -> pure subst'
+        (ov : _)
+          | progressed -> loop subst' (reverse deferred)
+          | otherwise  -> ambiguous ov (applyTy subst' (ovTy ov))
+
+    -- Try to resolve one occurrence under the substitution accumulated so far.
+    step (subst, deferred, progressed) ov = do
+      let t = applyTy subst (ovTy ov)
+      matches <- candidateMatches ov t
+      case bestSchemeMatch matches of
+        NoMatch        -> noInstance ov t
+        UniqueMatch su -> pure (su `composeS` subst, deferred, True)
+        -- Defer, might be constrained in a future pass.
+        TieMatch       -> pure (subst, ov : deferred, progressed)
+
+    -- Give each scheme fresh vars, then grab each candidate scheme that unifies with this occurrences current type.
+    candidateMatches ov t = fmap catMaybes (mapM tryCand (ovCands ov))
+      where
+        tryCand sc = do
+          cand <- instantiate sc
+          (do su <- unify (ovSpan ov) cand t
+              pure (Just (su, sc)))
+            `catchError` \_ -> pure Nothing
+
+    noInstance ov t = failAt (ovSpan ov)
+      ("no implementation of " ++ ovName ov ++ " for type " ++ prettyUType t)
+      "no matching overload"
+
+    ambiguous ov t = failAt (ovSpan ov)
+      ("ambiguous overloaded use of " ++ ovName ov ++ " at type " ++ prettyUType t
+        ++ " (more than one implementation fits)")
+      "ambiguous overload"
+
+-- Matching scheme to candidate scheme. In order of worst to preferred match.
+data SchemeMatch = NoMatch | TieMatch | UniqueMatch Subst
+
+-- Prefer most specific (least type variables).
+-- E.g. `String -> String` is more specific than `[a] -> [a]`
+bestSchemeMatch :: [(Subst, Scheme)] -> SchemeMatch
+bestSchemeMatch [] = NoMatch
+bestSchemeMatch ms =
+  case sortOn vars ms of
+    ranked@(best : _) ->
+      let minVars = vars best
+      in case filter ((== minVars) . vars) ranked of
+           [_] -> UniqueMatch (fst best)
+           _   -> TieMatch
+    [] -> NoMatch
+  where
+    vars (_, Scheme vs _) = length vs
+
