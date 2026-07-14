@@ -11,8 +11,11 @@ import Core
 import Data.Array (elems)
 import qualified Data.ByteString.Base64 as B64
 import Data.Char (toLower, toUpper)
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.ICU as ICUB
 import qualified Data.Text.ICU.Char as ICU
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -76,6 +79,7 @@ composeScheme =
     (TyVar a `TyArr` TyVar b)
       `TyArr` ((TyVar b `TyArr` TyVar c) `TyArr` (TyVar a `TyArr` TyVar c))
 
+--TODO: Once String type is no longer a collection, these don't have to be in overload order anymore.
 prims :: [Prim]
 prims =
   -- Pipeline plumbing
@@ -131,9 +135,11 @@ prims =
       -- [a] -> Int
       (Scheme [a] $ TyList (TyVar a) `TyArr` TyInt)
       implLength,
+    -- Grapheme cluster aware reverse specialized for String
+    monoPrim "reverse" (tyStr :-> tyStr) (k1 graphemeReverse),
+    -- `[a] -> [a]` element-wise reverse
     Prim
       "reverse"
-      -- [a] -> [a]
       (Scheme [a] $ TyList (TyVar a) `TyArr` TyList (TyVar a))
       implReverse,
     Prim
@@ -159,19 +165,34 @@ prims =
     monoPrim "not" (TyBoolT :-> TyBoolT) (k1 Prelude.not)
   ]
 
-primSchemes :: [(Name, Scheme)]
-primSchemes = [(primName_ p, primScheme_ p) | p <- prims]
+-- Map of names to type scheme lists, so prims can be overloaded.
+primSchemes :: Map Name [Scheme]
+primSchemes = Map.fromListWith (flip (++)) [(primName_ p, [primScheme_ p]) | p <- prims]
 
 primNames :: Set Name
 primNames = Set.fromList (map primName_ prims)
 
+-- Find an implementation for the given name that matches the requested runtime type.
+-- Fallthrough to next when no match.
 lookupImpl :: forall t. Name -> Ty t -> Maybe t
 lookupImpl name reqTy = go prims
   where
     go [] = Nothing
     go (p : rest)
-      | primName_ p == name = primImpl_ p reqTy
+      | primName_ p == name = case primImpl_ p reqTy of
+          Just impl -> Just impl
+          Nothing   -> go rest
       | otherwise = go rest
+
+-- Reverse a string by grapheme cluster rather than by Char
+graphemeReverse :: String -> String
+graphemeReverse =
+  T.unpack
+    . mconcat
+    . reverse
+    . map ICUB.brkBreak
+    . ICUB.breaks (ICUB.breakCharacter ICUB.Current)
+    . T.pack
 
 b64encode :: String -> String
 b64encode = T.unpack . TE.decodeUtf8 . B64.encode . TE.encodeUtf8 . T.pack

@@ -4,7 +4,6 @@ module Lib
   ) where
 
 import Data.Bifunctor (first)
-import qualified Data.Map.Strict as Map
 
 import Parser   (parseProgram)
 import Resolve  (resolve)
@@ -22,7 +21,7 @@ prepare :: String -> Either String (Typed (Term ()))
 prepare src = do
   uterm  <- parseProgram src
   ixterm <- first (renderDiagnostic src) (resolve Prims.primNames uterm)
-  ann    <- first (renderDiagnostic src) (inferProgram (Map.fromList Prims.primSchemes) ixterm)
+  ann    <- first (renderDiagnostic src) (inferProgram Prims.primSchemes ixterm)
   first (renderDiagnostic src) (elaborateClosed ann)
 
 -- Run program against stdin string. 
