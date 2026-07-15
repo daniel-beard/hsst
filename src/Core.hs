@@ -4,7 +4,6 @@ module Core
   , Var (..)
   , Typed (..)
   , ExType (..)
-  , tyStr
   , cmpTy
   , reifyTy
   , tyToUType
@@ -13,6 +12,7 @@ module Core
   )
 where
 
+import qualified Data.Text as T
 import Data.Type.Equality ((:~:) (Refl))
 import Interp (Interp)
 import Text.Regex.PCRE (Regex)
@@ -22,6 +22,7 @@ import Syntax (UType (..), prettyUType)
 -- so a `Ty t` is a singleton witness for `t`.
 data Ty t where
   TyCharT  :: Ty Char
+  TyStrT   :: Ty T.Text
   TyIntT   :: Ty Int
   TyBoolT  :: Ty Bool
   -- A compiled PCRE regex.
@@ -39,10 +40,6 @@ infixr 1 :->
 pattern (:->) :: () => (t ~ (a -> Interp b)) => Ty a -> Ty b -> Ty t
 pattern a :-> b = TyArrT a b
 
--- The string type: [Char]. List operations work on these, like `length`
-tyStr :: Ty String
-tyStr = TyListT TyCharT
-
 -- de Bruijn index, type-aware.
 data Var g t where
   ZVar :: Var (g, t) t
@@ -54,9 +51,9 @@ data Term g t where
   TVar   :: Var g t -> Term g t
   TLam   :: Ty a -> Term (g, a) b -> Term g (a -> Interp b)
   TApp   :: Term g (a -> Interp b) -> Term g a -> Term g b
-  TStr   :: String -> Term g String
   TRegex :: Regex -> Term g Regex
   TChar  :: Char -> Term g Char
+  TStr   :: T.Text -> Term g T.Text
   TInt   :: Int -> Term g Int
   TBool  :: Bool -> Term g Bool
   -- Primitives are opaque interpreter values of the right runtime type.
@@ -69,6 +66,7 @@ data ExType = forall t. ExType (Ty t)
 
 cmpTy :: Ty a -> Ty b -> Maybe (a :~: b)
 cmpTy TyCharT  TyCharT   = Just Refl
+cmpTy TyStrT   TyStrT    = Just Refl
 cmpTy TyIntT   TyIntT    = Just Refl
 cmpTy TyBoolT  TyBoolT   = Just Refl
 cmpTy TyRegexT TyRegexT  = Just Refl
@@ -86,6 +84,7 @@ cmpTy _ _ = Nothing
 reifyTy :: UType -> Either String ExType
 reifyTy ut = case ut of
   TyChar    -> Right (ExType TyCharT)
+  TyStr     -> Right (ExType TyStrT)
   TyInt     -> Right (ExType TyIntT)
   TyBool    -> Right (ExType TyBoolT)
   TyRegex   -> Right (ExType TyRegexT)
@@ -110,6 +109,7 @@ reifyTy ut = case ut of
 tyToUType :: Ty t -> UType
 tyToUType t = case t of
   TyCharT    -> TyChar
+  TyStrT     -> TyStr
   TyIntT     -> TyInt
   TyBoolT    -> TyBool
   TyRegexT   -> TyRegex
@@ -117,5 +117,5 @@ tyToUType t = case t of
   TyArrT a b -> TyArr (tyToUType a) (tyToUType b)
 
 -- Render a GADT type by projecting to UType and reusing the single UType pretty-printer.
-showTy :: Ty t -> String
+showTy :: Ty t -> T.Text
 showTy = prettyUType . tyToUType

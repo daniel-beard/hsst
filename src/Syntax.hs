@@ -20,6 +20,7 @@ module Syntax
   )
 where
 
+import qualified Data.Text as T
 import Diagnostics (Span(..))
 
 type Name = String
@@ -31,6 +32,7 @@ type TVar = Int
 data UType
   = TyVar TVar
   | TyChar
+  | TyStr
   | TyInt
   | TyBool
   | TyRegex
@@ -47,7 +49,7 @@ data UTerm
   | ULam  Name  UTerm
   | UApp  UTerm UTerm
   | ULet  Name  UTerm  UTerm
-  | UStr   Span  String
+  | UStr   Span  T.Text
   | URegex Span  String -- raw pattern text
   | UChar  Span  Char
   | UInt   Span  Int
@@ -65,7 +67,7 @@ data IxTerm
   | IApp  Span IxTerm IxTerm
   | ILam  Span IxTerm
   | ILet  Span IxTerm IxTerm
-  | IStr   Span String
+  | IStr   Span T.Text
   | IRegex Span String -- raw pattern text, compiled later. See `Elaborate.hs`
   | IChar  Span Char
   | IInt   Span Int
@@ -125,33 +127,36 @@ substIx k0 s0 = go k0 s0
       ILam sp b   -> ILam sp (go (k + 1) (shiftIx 1 0 s) b)
       ILet sp r b -> ILet sp (go k s r) (go (k + 1) (shiftIx 1 0 s) b)
 
-prettyUType :: UType -> String
+prettyUType :: UType -> T.Text
 prettyUType = go (0 :: Int)
   where
-    go _ (TyVar n)       = "t" ++ show n
+    go :: Int -> UType -> T.Text
+    go _ (TyVar n)       = "t" <> T.show n
     go _ TyChar          = "Char"
     go _ TyInt           = "Int"
     go _ TyBool          = "Bool"
     go _ TyRegex         = "Regex"
-    go _ (TyList TyChar) = "String"
-    go _ (TyList t)      = "[" ++ go 0 t ++ "]"
+    go _ TyStr           = "String"
+    go _ (TyList t)      = "[" <> go 0 t <> "]"
     go p (TyArr a b) =
-      let s = go 1 a ++ " -> " ++ go 0 b
-       in if p > 0 then "(" ++ s ++ ")" else s
+      let s = go 1 a <> " -> " <> go 0 b
+       in if p > 0 then "(" <> s <> ")" else s
 
-prettyUTerm :: UTerm -> String
+prettyUTerm :: UTerm -> T.Text
 prettyUTerm = go (0 :: Int)
   where
-    paren p s           = if p > 0 then "(" ++ s ++ ")" else s
-    go _ (UVar _ x)     = x
-    go _ (UStr _ s)     = show s
-    go _ (URegex _ s)   = "/" ++ s ++ "/"
-    go _ (UChar _ c)    = show c
-    go _ (UInt _ n)     = show n
+    paren :: Int -> T.Text -> T.Text
+    paren p s           = if p > 0 then "(" <> s <> ")" else s
+    go :: Int -> UTerm -> T.Text
+    go _ (UVar _ x)     = T.show x
+    go _ (UStr _ s)     = T.show s
+    go _ (URegex _ s)   = "/" <> T.show s <> "/"
+    go _ (UChar _ c)    = T.show c
+    go _ (UInt _ n)     = T.show n
     go _ (UBool _ b)    = if b then "true" else "false"
-    go p (ULam x e)     = paren p ("\\" ++ x ++ " -> " ++ go 0 e)
-    go _ (UApp f a)     = go 0 f ++ "(" ++ go 0 a ++ ")"
-    go p (ULet x e1 e2) = paren p ("let " ++ x ++ " = " ++ go 0 e1 ++ " in " ++ go 0 e2)
+    go p (ULam x e)     = paren p ("\\" <> T.show x <> " -> " <> go 0 e)
+    go _ (UApp f a)     = go 0 f <> "(" <> go 0 a <> ")"
+    go p (ULet x e1 e2) = paren p ("let " <> T.show x <> " = " <> go 0 e1 <> " in " <> go 0 e2)
 
 -- AnnTerm: variables, primitives, and lambda binders carry their inferred
 -- (post-substitution) type. Application's result type is recoverable from
@@ -163,7 +168,7 @@ data AnnTerm
   | APrim Span Name    UType
   | AApp   Span AnnTerm AnnTerm
   | ALam   Span UType   AnnTerm -- binder type, body
-  | AStr   Span String
+  | AStr   Span T.Text
   | ARegex Span String -- raw pattern text
   | AChar  Span Char
   | AInt   Span Int

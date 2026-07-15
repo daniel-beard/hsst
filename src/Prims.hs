@@ -92,26 +92,26 @@ prims =
       "tee"
       (Scheme [a] $ TyVar a `TyArr` TyVar a) implTee,
     -- String <-> [String]. A String is [Char]. The polymorphic list ops below also apply.
-    monoPrim "words"      (tyStr :-> TyListT tyStr) (k1 words),
-    monoPrim "unwords"    (TyListT tyStr :-> tyStr) (k1 unwords),
-    monoPrim "lines"      (tyStr :-> TyListT tyStr) (k1 lines),
-    monoPrim "unlines"    (TyListT tyStr :-> tyStr) (k1 unlines),
+    monoPrim "words"      (TyStrT :-> TyListT TyStrT) (k1 T.words),
+    monoPrim "unwords"    (TyListT TyStrT :-> TyStrT) (k1 T.unwords),
+    monoPrim "lines"      (TyStrT :-> TyListT TyStrT) (k1 T.lines),
+    monoPrim "unlines"    (TyListT TyStrT :-> TyStrT) (k1 T.unlines),
     -- Scalar string ops
-    monoPrim "uppercase"  (tyStr :-> tyStr) (k1 $ map toUpper),
-    monoPrim "lowercase"  (tyStr :-> tyStr) (k1 $ map toLower),
-    monoPrim "inspect"    (tyStr :-> TyListT tyStr) (k1 $ map ICU.charName),
+    monoPrim "uppercase"  (TyStrT :-> TyStrT) (k1 $ T.toUpper),
+    monoPrim "lowercase"  (TyStrT :-> TyStrT) (k1 $ T.toLower),
+    monoPrim "inspect"    (TyStrT :-> TyListT TyStrT) (k1 $ map (T.pack . ICU.charName) . T.unpack),
     -- Char ops -- pair these with map/filter to work per character
     monoPrim "upcaseChar"   (TyCharT :-> TyCharT) (k1 toUpper),
     monoPrim "downcaseChar" (TyCharT :-> TyCharT) (k1 toLower),
     -- Unicode character name, e.g. 'a' -> "LATIN SMALL LETTER A".
     -- "" for unnamed code points.
-    monoPrim "charName"   (TyCharT :-> tyStr) (k1 ICU.charName),
-    monoPrim "codePoint"  (TyCharT :-> tyStr) (k1 $ printf "U+%04X"),
-    monoPrim "base64"     (tyStr :-> tyStr) (k1 b64encode),
-    monoPrim "unbase64"   (tyStr :-> tyStr) (k1 b64decode),
+    monoPrim "charName"   (TyCharT :-> TyStrT) (k1 (T.pack . ICU.charName)),
+    monoPrim "codePoint"  (TyCharT :-> TyStrT) (k1 $ T.pack . printf "U+%04X"),
+    monoPrim "base64"     (TyStrT :-> TyStrT) (k1 b64encode),
+    monoPrim "unbase64"   (TyStrT :-> TyStrT) (k1 b64decode),
     -- Regex ops
     -- Regex first so a partial application `matches(/foo/)` is a String -> Bool
-    monoPrim "matches" (TyRegexT :-> tyStr :-> TyBoolT) (k2 matchTest),
+    monoPrim "matches" (TyRegexT :-> TyStrT :-> TyBoolT) (k2 (\rx s -> matchTest rx (T.unpack s))),
     -- match - runs the regex, records capture groups in interpreter State. 
     -- returns whole match or "" if no match
     Prim "match" (monoScheme matchTy) implMatch,
@@ -120,28 +120,36 @@ prims =
     -- TODO: Remove these, dollar refs should desugar to group(n) directly
     Prim "$1" (monoScheme dollarTy) (implDollar 1),
     Prim "$2" (monoScheme dollarTy) (implDollar 2),
+    monoPrim "take" (TyIntT :-> TyStrT :-> TyStrT) (k2 T.take),
     Prim
       "take"
       -- Int -> [a] -> [a]
       (Scheme [a] $ TyInt `TyArr` (TyList (TyVar a) `TyArr` TyList (TyVar a)))
       implTake,
+    monoPrim "drop" (TyIntT :-> TyStrT :-> TyStrT) (k2 T.drop),
     Prim
       "drop"
       -- Int -> [a] -> [a]
       (Scheme [a] $ TyInt `TyArr` (TyList (TyVar a) `TyArr` TyList (TyVar a)))
       implDrop,
+    monoPrim "length" (TyStrT :-> TyIntT) (k1 T.length),
     Prim
       "length"
       -- [a] -> Int
       (Scheme [a] $ TyList (TyVar a) `TyArr` TyInt)
       implLength,
     -- Grapheme cluster aware reverse specialized for String
-    monoPrim "reverse" (tyStr :-> tyStr) (k1 graphemeReverse),
+    monoPrim "reverse" (TyStrT :-> TyStrT) (k1 graphemeReverse),
     -- `[a] -> [a]` element-wise reverse
     Prim
       "reverse"
       (Scheme [a] $ TyList (TyVar a) `TyArr` TyList (TyVar a))
       implReverse,
+    -- Char-wise map/filter specialized for String.
+    -- Char ops are Kleisli - have to thread the effect with mapM/filterM
+    monoPrim "map"
+      ((TyCharT :-> TyCharT) :-> TyStrT :-> TyStrT)
+      (\f -> pure (\s -> T.pack <$> mapM f (T.unpack s))),
     Prim
       "map"
       -- (a -> b) -> [a] -> [b]
@@ -150,6 +158,9 @@ prims =
             `TyArr` (TyList (TyVar a) `TyArr` TyList (TyVar b))
       )
       implMap,
+    monoPrim "filter"
+      ((TyCharT :-> TyBoolT) :-> TyStrT :-> TyStrT)
+      (\p -> pure (\s -> T.pack <$> filterM p (T.unpack s))),
     Prim
       "filter"
       -- (a -> b) -> [a] -> [a]
@@ -185,34 +196,32 @@ lookupImpl name reqTy = go prims
       | otherwise = go rest
 
 -- Reverse a string by grapheme cluster rather than by Char
-graphemeReverse :: String -> String
+graphemeReverse :: T.Text -> T.Text
 graphemeReverse =
-  T.unpack
-    . mconcat
+  mconcat
     . reverse
     . map ICUB.brkBreak
     . ICUB.breaks (ICUB.breakCharacter ICUB.Current)
-    . T.pack
 
-b64encode :: String -> String
-b64encode = T.unpack . TE.decodeUtf8 . B64.encode . TE.encodeUtf8 . T.pack
+b64encode :: T.Text -> T.Text
+b64encode = TE.decodeUtf8 . B64.encode . TE.encodeUtf8
 
-b64decode :: String -> String
-b64decode s = case B64.decode (TE.encodeUtf8 (T.pack s)) of
-  Right bs -> T.unpack (TE.decodeUtf8 bs)
+b64decode :: T.Text -> T.Text
+b64decode s = case B64.decode (TE.encodeUtf8 s) of
+  Right bs -> TE.decodeUtf8 bs
   Left e   -> error $ "unbase64: " ++ e
 
 -- Concrete types for the regex group prims (also the single source for their inference schemes via `monoScheme`). 
 -- The index is the Kleisli runtime type: each source-level arrow contributes an `Interp` in the value's type.
-matchTy :: Ty (Regex -> Interp (String -> Interp String))
-matchTy = TyRegexT :-> tyStr :-> tyStr
+matchTy :: Ty (Regex -> Interp (T.Text -> Interp T.Text))
+matchTy = TyRegexT :-> TyStrT :-> TyStrT
 
-groupTy :: Ty (Int -> Interp (String -> Interp String))
-groupTy = TyIntT :-> tyStr :-> tyStr
+groupTy :: Ty (Int -> Interp (T.Text -> Interp T.Text))
+groupTy = TyIntT :-> TyStrT :-> TyStrT
 
 -- `$1`/`$2` are `group` with the index already supplied: just `String -> String`.
-dollarTy :: Ty (String -> Interp String)
-dollarTy = tyStr :-> tyStr
+dollarTy :: Ty (T.Text -> Interp T.Text)
+dollarTy = TyStrT :-> TyStrT
 
 -- Polymorphic-prim dispatchers. 
 -- Each pattern-matches the requested Ty to recover the witnesses for the type variables, 
@@ -295,7 +304,7 @@ implDollar n ty = do
   pure (\_ -> readGroup n)
 
 -- Read the n-th group recorded by the most recent `match`, "" if out of range.
-readGroup :: Int -> Interp String
+readGroup :: Int -> Interp T.Text
 readGroup n = do
   InterpS gs <- get
   pure (if n >= 0 && n < length gs then gs !! n else "")
@@ -303,9 +312,9 @@ readGroup n = do
 -- All matched substrings of the first match, empty when pattern doesn't match.
 -- 0: the whole match
 -- 1.. the matched groups
-matchGroups :: Regex -> String -> [String]
-matchGroups rx s = case matchOnceText rx s of
-  Just (_, arr, _) -> map fst (elems arr)
+matchGroups :: Regex -> T.Text -> [T.Text]
+matchGroups rx s = case matchOnceText rx (T.unpack s) of
+  Just (_, arr, _) -> map (T.pack . fst) (elems arr)
   Nothing          -> []
 
 --TODO: Move this somewhere else.

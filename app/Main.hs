@@ -1,9 +1,11 @@
 module Main (main) where
 
 import Control.Exception (SomeException, catch)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
-import System.IO (hPutStrLn, stderr, stdin, hIsTerminalDevice)
+import System.IO (stderr, stdin, hIsTerminalDevice)
 import System.Process (readProcess)
 
 import Lib (runProgramWithLog)
@@ -16,19 +18,19 @@ main = do
       -- When stdin is piped or passed in, use it.
       -- isTty means nothing to read from stdin, use pasteboard contents in that case.
       isTty  <- hIsTerminalDevice stdin
-      stdin_ <- if isTty then readPasteboard else getContents
+      stdin_ <- if isTty then readPasteboard else TIO.getContents
       -- For now, eval is still pure.
       -- tee's log goes to stderr, program result to stdout
-      case runProgramWithLog src stdin_ of
+      case runProgramWithLog (T.pack src) stdin_ of
         Right (out, logs) -> do
-          mapM_ (hPutStrLn stderr) logs
-          putStrLn out
-        Left  err -> hPutStrLn stderr err >> exitFailure
+          mapM_ (TIO.hPutStrLn stderr) logs
+          TIO.putStrLn out
+        Left  err -> TIO.hPutStrLn stderr err >> exitFailure
     _ -> do
-      hPutStrLn stderr "usage: hsst '<program>'"
+      TIO.hPutStrLn stderr "usage: hsst '<program>'"
       exitFailure
 
 -- pasteboard or empty string.
-readPasteboard :: IO String
+readPasteboard :: IO T.Text
 readPasteboard =
-  readProcess "pbpaste" [] "" `catch` \(_ :: SomeException) -> pure ""
+  (T.pack <$> readProcess "pbpaste" [] "") `catch` \(_ :: SomeException) -> pure ""

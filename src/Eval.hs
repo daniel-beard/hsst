@@ -4,7 +4,7 @@ module Eval
   , render
   ) where
 
-import Data.List (intercalate)
+import qualified Data.Text as T
 import Core
 import Interp (Interp)
 
@@ -40,13 +40,14 @@ eval env e = case e of
 -- Show-style rendering: strings quoted, lists as ["a","b",...], plain
 -- otherwise. Function values (the result of a partial pipeline that wasn't
 -- applied to anything) get a placeholder.
-render :: Ty t -> t -> String
+render :: Ty t -> t -> T.Text
 render ty x = case ty of
-  TyCharT          -> show x
-  TyIntT           -> show x
+  TyCharT          -> T.show x
+  TyStrT           -> T.show x
+  TyIntT           -> T.show x
   TyBoolT          -> if x then "true" else "false"
   --TODO: Better render representation?
   TyRegexT         -> "<regex>"
-  TyListT TyCharT  -> show x
-  TyListT a        -> "[" ++ intercalate "," (map (render a) x) ++ "]"
-  TyArrT _ _       -> "<function : " ++ showTy ty ++ ">"
+  TyListT TyCharT  -> T.show x
+  TyListT a        -> "[" <> T.intercalate "," (map (render a) x) <> "]"
+  TyArrT _ _       -> "<function : " <> showTy ty <> ">"
