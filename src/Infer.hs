@@ -11,6 +11,7 @@ import Data.List (sortOn)
 import Data.Maybe (catMaybes)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import qualified Data.Text as T
 import Data.Map.Strict (Map)
 import Data.Set (Set)
 
@@ -93,7 +94,7 @@ recordOverload :: Overload -> Infer ()
 recordOverload ov = modify $ \s -> s { isOverloads = ov : isOverloads s }
 
 -- Abort inference with a diagnostic pointing at the given span.
-failAt :: Span -> String -> String -> Infer a
+failAt :: Span -> T.Text -> T.Text -> Infer a
 failAt sp msg lbl =
   throwError Diagnostic { diagMessage = msg, diagSpan = sp, diagLabel = lbl }
 
@@ -103,6 +104,7 @@ failAt sp msg lbl =
 unify :: Span -> UType -> UType -> Infer Subst
 unify sp a b = case (a, b) of
   (TyChar,   TyChar)   -> pure emptySubst
+  (TyStr,    TyStr)    -> pure emptySubst
   (TyInt,    TyInt)    -> pure emptySubst
   (TyBool,   TyBool)   -> pure emptySubst
   (TyRegex,  TyRegex)  -> pure emptySubst
@@ -118,13 +120,13 @@ unify sp a b = case (a, b) of
   (TyArr _ _, _) -> notAFunction sp b
   (_, TyArr _ _) -> notAFunction sp a
   _ -> failAt sp
-         ("type mismatch: cannot unify " ++ prettyUType a
-            ++ " with " ++ prettyUType b)
+         ("type mismatch: cannot unify " <> prettyUType a
+            <> " with " <> prettyUType b)
          "mismatched types"
 
 notAFunction :: Span -> UType -> Infer Subst
 notAFunction sp t =
-  failAt sp ("expected a function, but got " ++ prettyUType t) "not a function"
+  failAt sp ("expected a function, but got " <> prettyUType t) "not a function"
 
 -- A type that definitely isn't a function: a concrete base/list type, 
 -- as opposed to an arrow (a function) or a type variable.
@@ -139,7 +141,7 @@ bindVar _ n (TyVar m) | n == m = pure emptySubst
 bindVar sp n t
   | n `Set.member` ftvTy t =
       failAt sp
-        ("occurs check: " ++ prettyUType (TyVar n) ++ " in " ++ prettyUType t)
+        ("occurs check: " <> prettyUType (TyVar n) <> " in " <> prettyUType t)
         "infinite type"
   | otherwise = pure (Map.singleton n t)
 
@@ -171,7 +173,7 @@ elimLets t = case t of
 -- Returns (subst, type, annotated-term).
 infer :: PrimEnv -> [UType] -> IxTerm -> Infer (Subst, UType, AnnTerm)
 infer prims ctx e = case e of
-  IStr   sp v -> pure (emptySubst, TyList TyChar, AStr sp v)
+  IStr   sp v -> pure (emptySubst, TyStr, AStr sp v)
   IRegex sp v -> pure (emptySubst, TyRegex,  ARegex sp v)
   IChar  sp v -> pure (emptySubst, TyChar,   AChar sp v)
   IInt   sp v -> pure (emptySubst, TyInt,    AInt sp v)
@@ -179,14 +181,14 @@ infer prims ctx e = case e of
 
   IVar sp i
     | i < 0 || i >= length ctx ->
-        failAt sp ("internal: dangling de Bruijn index " ++ show i) ""
+        failAt sp ("internal: dangling de Bruijn index " <> T.show i) ""
     | otherwise ->
         let ty = ctx !! i
         in pure (emptySubst, ty, AVar sp i ty)
 
   IPrim sp x -> case Map.lookup x prims of
-    Nothing  -> failAt sp ("unknown primitive: " ++ x) "not a known primitive"
-    Just []  -> failAt sp ("unknown primitive: " ++ x) "not a known primitive"
+    Nothing  -> failAt sp ("unknown primitive: " <> T.pack x) "not a known primitive"
+    Just []  -> failAt sp ("unknown primitive: " <> T.pack x) "not a known primitive"
     -- Single scheme: ordinary monomorphising instantiation
     Just [sc] -> do
       ty <- instantiate sc
@@ -214,8 +216,8 @@ infer prims ctx e = case e of
       -- If x is a concrete non-function value, suggest value application: `&`. 
       (IPrim pSpan "|>", tLeft) | notFunctionType tLeft ->
         failAt pSpan
-          ("expected a function, but got " ++ prettyUType tLeft
-             ++ "; |> composes functions -- use & to apply a value to a function")
+          ("expected a function, but got " <> prettyUType tLeft
+             <> "; |> composes functions -- use & to apply a value to a function")
           "did you mean & ?"
       _ -> do
         -- Blame the argument: that's the expression whose type has to fit the
@@ -246,11 +248,11 @@ inferProgram prims t0 =
 
     defaultStdin ty = case ty of
       TyArr dom _ ->
-        unify noSpan dom (TyList TyChar) `catchError` \_ -> pure emptySubst
+        unify noSpan dom TyStr `catchError` \_ -> pure emptySubst
       -- Whole program is a bare type var, make it a String filter.
       TyVar _ -> do
         b <- freshTy
-        unify noSpan ty (TyArr (TyList TyChar) b) `catchError` \_ -> pure emptySubst
+        unify noSpan ty (TyArr TyStr b) `catchError` \_ -> pure emptySubst
       _ -> pure emptySubst
 
 -- Resolve deferred overloads
@@ -290,12 +292,12 @@ resolveOverloads s0 = loop s0
             `catchError` \_ -> pure Nothing
 
     noInstance ov t = failAt (ovSpan ov)
-      ("no implementation of " ++ ovName ov ++ " for type " ++ prettyUType t)
+      ("no implementation of " <> T.pack (ovName ov) <> " for type " <> prettyUType t)
       "no matching overload"
 
     ambiguous ov t = failAt (ovSpan ov)
-      ("ambiguous overloaded use of " ++ ovName ov ++ " at type " ++ prettyUType t
-        ++ " (more than one implementation fits)")
+      ("ambiguous overloaded use of " <> T.pack (ovName ov) <> " at type " <> prettyUType t
+        <> " (more than one implementation fits)")
       "ambiguous overload"
 
 -- Matching scheme to candidate scheme. In order of worst to preferred match.

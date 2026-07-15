@@ -4,6 +4,7 @@ module Resolve
 
 import qualified Data.Set as Set
 import Data.Set (Set)
+import qualified Data.Text as T
 
 import Syntax
 import Diagnostics (Diagnostic(..), mergeSpan)
@@ -21,7 +22,7 @@ resolve prims = go []
       Nothing
         | x `Set.member` prims -> Right (IPrim sp x)
         | otherwise            -> Left Diagnostic
-            { diagMessage = "unbound variable: " ++ x
+            { diagMessage = "unbound variable: " <> T.pack x
             , diagSpan    = sp
             , diagLabel   = "not found in scope"
             }

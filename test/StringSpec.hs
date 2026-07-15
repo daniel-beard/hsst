@@ -1,5 +1,6 @@
 module StringSpec (spec) where
 
+import qualified Data.Text as T
 import Lib (runProgram)
 import Test.Hspec
 
@@ -20,7 +21,7 @@ spec = describe "strings & chars" $ do
 
     it "base64 round-trips non-ASCII" $
       runProgram "base64 |> unbase64" "café ☕ 你好"
-        `shouldBe` Right (show ("café ☕ 你好" :: String))
+        `shouldBe` Right (T.show ("café ☕ 你好" :: T.Text))
 
     it "list string reverse on stdin" $
       runProgram "reverse" "abc"

@@ -7,6 +7,7 @@ module Elaborate
   , elaborateClosed
   ) where
 
+import qualified Data.Text as T
 import Data.Type.Equality ((:~:)(Refl))
 
 import Syntax
@@ -17,16 +18,16 @@ import Prims
 
 -- An "internal" error: a soundness bug in an earlier pass, not a user mistake.
 -- Still given a span so it lands somewhere useful if it ever fires.
-internal :: Span -> String -> Either Diagnostic a
+internal :: Span -> T.Text -> Either Diagnostic a
 internal sp msg =
-  Left Diagnostic { diagMessage = "internal: " ++ msg, diagSpan = sp, diagLabel = "" }
+  Left Diagnostic { diagMessage = "internal: " <> msg, diagSpan = sp, diagLabel = "" }
 
 -- Reify a UType at a known span, turning the "ambiguous type" failure into a
 -- diagnostic that points at the expression whose type couldn't be pinned down.
 reifyAt :: Span -> UType -> Either Diagnostic ExType
 reifyAt sp ut = case reifyTy ut of
   Right ex -> Right ex
-  Left msg -> Left Diagnostic { diagMessage = msg, diagSpan = sp, diagLabel = "ambiguous type" }
+  Left msg -> Left Diagnostic { diagMessage = T.pack msg, diagSpan = sp, diagLabel = "ambiguous type" }
 
 -- The elaboration-time type environment: a stack of GADT singleton types
 -- mirroring the de Bruijn lambda-binder stack. Indexed by the same `g`
@@ -50,7 +51,7 @@ lookupVar sp n (TyCons _  rest) = do
 -- here points back at the source.
 elaborate :: TyEnv g -> AnnTerm -> Either Diagnostic (Typed (Term g))
 elaborate env e = case e of
-  AStr  _ v -> Right (Typed tyStr   (TStr v))
+  AStr  _ v -> Right (Typed TyStrT  (TStr v))
   AChar _ v -> Right (Typed TyCharT (TChar v))
   AInt  _ v -> Right (Typed TyIntT  (TInt v))
   ABool _ v -> Right (Typed TyBoolT (TBool v))
@@ -60,7 +61,7 @@ elaborate env e = case e of
   ARegex sp pat -> case compileRegex pat of
     Right rx       -> Right (Typed TyRegexT (TRegex rx))
     Left (off, msg) -> Left Diagnostic
-      { diagMessage = "invalid regex: " ++ msg
+      { diagMessage = "invalid regex: " <> T.pack msg
       , diagSpan    = regexErrSpan sp off
       , diagLabel   = "in this pattern"
       }
@@ -72,16 +73,16 @@ elaborate env e = case e of
     case cmpTy ety ty' of
       Just Refl -> Right (Typed ty' (TVar v))
       Nothing   -> internal sp $
-        "AVar annotation " ++ prettyUType ty
-        ++ " disagrees with elaboration env type " ++ showTy ty'
+        "AVar annotation " <> prettyUType ty
+        <> " disagrees with elaboration env type " <> showTy ty'
 
   APrim sp n ty -> do
     ExType rty <- reifyAt sp ty
     case Prims.lookupImpl n rty of
       Just impl -> Right (Typed rty (TPrim n rty impl))
       Nothing   -> Left Diagnostic
-        { diagMessage = "primitive " ++ n
-                          ++ " has no implementation at type " ++ showTy rty
+        { diagMessage = "primitive " <> T.pack n
+                          <> " has no implementation at type " <> showTy rty
         , diagSpan    = sp
         , diagLabel   = "unsupported at this type"
         }
@@ -98,10 +99,10 @@ elaborate env e = case e of
       bnd :-> ret -> case cmpTy tA bnd of
         Just Refl -> Right (Typed ret (TApp fTerm aTerm))
         Nothing   -> internal sp $
-          "application argument type " ++ showTy tA
-          ++ " does not match function domain " ++ showTy bnd
+          "application argument type " <> showTy tA
+          <> " does not match function domain " <> showTy bnd
       _ -> internal sp $
-        "application of non-function type " ++ showTy tF
+        "application of non-function type " <> showTy tF
 
 elaborateClosed :: AnnTerm -> Either Diagnostic (Typed (Term ()))
 elaborateClosed = elaborate TyNil

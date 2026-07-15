@@ -4,6 +4,7 @@ module Lib
   ) where
 
 import Data.Bifunctor (first)
+import qualified Data.Text as T
 
 import Parser   (parseProgram)
 import Resolve  (resolve)
@@ -17,28 +18,28 @@ import qualified Prims
 
 
 -- parse, resolve, infer, elaborate. Convert to our GADT.
-prepare :: String -> Either String (Typed (Term ()))
+prepare :: T.Text -> Either T.Text (Typed (Term ()))
 prepare src = do
-  uterm  <- parseProgram src
+  uterm  <- first T.pack (parseProgram (T.unpack src))
   ixterm <- first (renderDiagnostic src) (resolve Prims.primNames uterm)
   ann    <- first (renderDiagnostic src) (inferProgram Prims.primSchemes ixterm)
   first (renderDiagnostic src) (elaborateClosed ann)
 
--- Run program against stdin string. 
+-- Run program against stdin string.
 -- Returns an error message, or the program output.
 -- Writer (InterpW) is discarded, use `runProgramWithLog` to get it.
-runProgram :: String -> String -> Either String String
+runProgram :: T.Text -> T.Text -> Either T.Text T.Text
 runProgram src stdin_ = fst <$> runProgramWithLog src stdin_
 
-runProgramWithLog :: String -> String -> Either String (String, InterpW)
+runProgramWithLog :: T.Text -> T.Text -> Either T.Text (T.Text, InterpW)
 runProgramWithLog src stdin_ = do
   Typed ty term <- prepare src
   Right (runInterp (InterpR stdin_) (run ty term))
-  where 
-    run :: Ty t -> Term () t -> Interp String
+  where
+    run :: Ty t -> Term () t -> Interp T.Text
     run ty term = case ty of
       -- If this program is String -> a, feed it stdin.
-      TyListT TyCharT :-> ret -> do
+      TyStrT :-> ret -> do
         f <- eval ENil term
         r <- f stdin_
         pure (render ret r)

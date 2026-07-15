@@ -3,7 +3,9 @@ module Parser
   ) where
 
 import Control.Monad (void)
+import Data.Bifunctor
 import Data.Void (Void)
+import qualified Data.Text as T
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -148,7 +150,7 @@ atom :: Parser UTerm
 atom = choice
   [ lambda
   , letBinding
-  , uncurry UStr   <$> stringLitSpan
+  , uncurry UStr . second T.pack <$> stringLitSpan
   , uncurry URegex <$> regexLitSpan
   , uncurry UChar  <$> charLitSpan
   , uncurry UInt   <$> intLitSpan

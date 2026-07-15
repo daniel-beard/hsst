@@ -22,12 +22,13 @@ module Interp
   ) where
 
 import Control.Monad.RWS.Strict (RWS, runRWS)
+import qualified Data.Text as T
 
 -- Read only interpreter context
-newtype InterpR = InterpR { stdinText :: String }
+newtype InterpR = InterpR { stdinText :: T.Text }
 
 -- Append only output logs e.g. `tee`. 
-type InterpW = [String]
+type InterpW = [T.Text]
 
 -- Mutable interpreter state
 newtype InterpS = InterpS 
@@ -35,7 +36,7 @@ newtype InterpS = InterpS
     -- Last matched regex groups
     -- Index 0 is the full match
     -- 1 onwards are the group matches
-    lastRegexGroupMatches :: [String]
+    lastRegexGroupMatches :: [T.Text]
   }
 
 type Interp = RWS InterpR InterpW InterpS

@@ -1,5 +1,6 @@
 module ProgramSpec (spec) where
 
+import qualified Data.Text as T
 import Lib (runProgram)
 import Test.Hspec
 
@@ -51,7 +52,7 @@ spec = do
       -- "café" - The 'e' here is 'e' + U+0301 (multi-code-point grapheme cluster.)
       -- Grapheme reverse keeps "e\769" together, where an element-wise reverse would come out invalid `"\769efac"`
       runProgram "reverse" "cafe\769"
-        `shouldBe` Right (show ("e\769fac" :: String))
+        `shouldBe` Right (T.show ("e\769fac" :: T.Text))
 
     it "picks the [a] -> [a] overload when piped a list of strings" $
       runProgram "words |> reverse" "a b c"
@@ -61,7 +62,7 @@ spec = do
       runProgram "reverse(42)" ""
         `shouldBe` Left
           --TODO: I need better way not to have to include the unmatched type-var in these...
-          (unlines
+          (T.unlines
              [ "error: no implementation of reverse for type Int -> String -> t1002"
              , " --> <arg>:1:1"
              , "  |"
@@ -73,7 +74,7 @@ spec = do
     it "renders an unbound variable with a rustc-like error format" $
       runProgram "words |> foo" ""
         `shouldBe` Left
-          (unlines
+          (T.unlines
              [ "error: unbound variable: foo"
              , " --> <arg>:1:10"
              , "  |"
@@ -84,7 +85,7 @@ spec = do
     it "points a type mismatch (from inference) at the offending argument" $
       runProgram "plus(2, \"x\")" ""
         `shouldBe` Left
-          (unlines
+          (T.unlines
              [ "error: type mismatch: cannot unify Int with String"
              , " --> <arg>:1:9"
              , "  |"
@@ -97,7 +98,7 @@ spec = do
       -- is almost certainly meant as `&` (value application).
       runProgram "'c' |> upcaseChar" ""
         `shouldBe` Left
-          (unlines
+          (T.unlines
              [ "error: expected a function, but got Char; |> composes functions -- use & to apply a value to a function"
              , " --> <arg>:1:5"
              , "  |"
@@ -108,7 +109,7 @@ spec = do
     it "reports a plain not-a-function error away from |> (no & hint)" $
       runProgram "compose('c', upcaseChar)" ""
         `shouldBe` Left
-          (unlines
+          (T.unlines
              [ "error: expected a function, but got Char"
              , " --> <arg>:1:9"
              , "  |"
@@ -117,14 +118,13 @@ spec = do
              ])
 
     it "points an ambiguous top-level type (from elaboration) at the expression" $
-      -- `map` expects a function as input, so it can't be defaulted to a
-      -- String stdin filter; its element types stay free and ambiguous.
-      runProgram "map" ""
+      -- `compose` expects a function as input, so a program that is only compose is ambiguous
+      runProgram "compose" ""
         `shouldBe` Left
-          (unlines
+          (T.unlines
              [ "error: ambiguous type: free type variable t1000 survived inference (the program is polymorphic at the top level and would need an annotation to run)"
              , " --> <arg>:1:1"
              , "  |"
-             , "1 | map"
-             , "  | ^^^ ambiguous type"
+             , "1 | compose"
+             , "  | ^^^^^^^ ambiguous type"
              ])

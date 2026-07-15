@@ -1,6 +1,6 @@
 module RegexSpec (spec) where
 
-import Data.List (isInfixOf)
+import qualified Data.Text as T
 import Test.Hspec
 
 import Lib (runProgram)
@@ -66,13 +66,13 @@ spec = do
 
     it "reports an invalid pattern as a compile error" $
       case runProgram "/[a/" "" of
-        Right out -> expectationFailure ("expected a compile error, got: " ++ out)
-        Left err  -> err `shouldSatisfy` ("invalid regex:" `isInfixOf`)
+        Right out -> expectationFailure ("expected a compile error, got: " ++ T.unpack out)
+        Left err  -> err `shouldSatisfy` ("invalid regex:" `T.isInfixOf`)
 
     it "points the caret inside the offending pattern" $
       case runProgram "/[a/" "" of
-        Right out -> expectationFailure ("expected a compile error, got: " ++ out)
-        Left err  -> err `shouldSatisfy` (\e -> "^" `isInfixOf` e && "1:" `isInfixOf` e)
+        Right out -> expectationFailure ("expected a compile error, got: " ++ T.unpack out)
+        Left err  -> err `shouldSatisfy` (\e -> "^" `T.isInfixOf` e && "1:" `T.isInfixOf` e)
 
   describe "matches" $ do
     it "is true when the pattern is found" $
