@@ -45,10 +45,10 @@ data UType
 -- ULam/UApp/ULet are composite: their span is recovered from their children
 -- during resolution rather than stored here.
 data UTerm
-  = UVar  Span  Name
-  | ULam  Name  UTerm
-  | UApp  UTerm UTerm
-  | ULet  Name  UTerm  UTerm
+  = UVar   Span  Name
+  | ULam   Name  UTerm
+  | UApp   UTerm UTerm
+  | ULet   Name  UTerm  UTerm
   | UStr   Span  T.Text
   | URegex Span  String -- raw pattern text
   | UChar  Span  Char
@@ -62,11 +62,11 @@ data UTerm
 -- Every node carries the source span it came from, so that a type error
 -- discovered after resolution can still point at the offending text.
 data IxTerm
-  = IVar  Span Int
-  | IPrim Span Name
-  | IApp  Span IxTerm IxTerm
-  | ILam  Span IxTerm
-  | ILet  Span IxTerm IxTerm
+  = IVar   Span Int
+  | IPrim  Span Name
+  | IApp   Span IxTerm IxTerm
+  | ILam   Span IxTerm
+  | ILet   Span IxTerm IxTerm
   | IStr   Span T.Text
   | IRegex Span String -- raw pattern text, compiled later. See `Elaborate.hs`
   | IChar  Span Char
@@ -164,8 +164,8 @@ prettyUTerm = go (0 :: Int)
 -- the source span threaded through from the IxTerm it was inferred from, so
 -- elaboration errors can point at the source.
 data AnnTerm
-  = AVar  Span Int     UType
-  | APrim Span Name    UType
+  = AVar   Span Int     UType
+  | APrim  Span Name    UType
   | AApp   Span AnnTerm AnnTerm
   | ALam   Span UType   AnnTerm -- binder type, body
   | AStr   Span T.Text
@@ -192,11 +192,11 @@ prettyIxTerm :: IxTerm -> String
 prettyIxTerm = go (0 :: Int)
   where
     paren p s         = if p > 0 then "(" ++ s ++ ")" else s
-    go _ (IVar _ i)    = "#" ++ show i
-    go _ (IPrim _ n)   = n
-    go _ (IStr _ s)    = show s
-    go _ (IRegex _ s)  = "/" ++ s ++ "/"
-    go _ (IChar _ c)   = show c
+    go _ (IVar _ i)   = "#" ++ show i
+    go _ (IPrim _ n)  = n
+    go _ (IStr _ s)   = show s
+    go _ (IRegex _ s) = "/" ++ s ++ "/"
+    go _ (IChar _ c)  = show c
     go _ (IInt _ n)   = show n
     go _ (IBool _ b)  = if b then "true" else "false"
     go p (ILam _ b)   = paren p ("\\. " ++ go 0 b)

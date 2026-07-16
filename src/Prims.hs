@@ -65,12 +65,15 @@ monoScheme ty = Scheme [] (tyToUType ty)
 -- Lift pure Haskell function into kleisli arrow that runs no effects.
 -- E.g. `words` is an ordinary curried func, which needs to be wrapped.
 -- `k1` & `k2` wraps the func so it matches the shape the runtime expects: `(a -> Interp b)`
--- TODO: Readdress if this gets annoying
 k1 :: (a -> b) -> (a -> Interp b)
 k1 f = pure . f
 
 k2 :: (a -> b -> c) -> (a -> Interp (b -> Interp c))
 k2 f x = pure $ k1 $ f x
+
+-- Lift a [Char] threading kleisli (mapM, filterM, …) on Text
+onStr :: (g -> [Char] -> Interp [Char]) -> (g -> Interp (T.Text -> Interp T.Text))
+onStr h = k1 (\g s -> T.pack <$> h g (T.unpack s))
 
 -- (a -> b) -> (b -> c) -> (a -> c). Shared by `compose` and the `|>` operator.
 composeScheme :: Scheme
@@ -79,7 +82,6 @@ composeScheme =
     (TyVar a `TyArr` TyVar b)
       `TyArr` ((TyVar b `TyArr` TyVar c) `TyArr` (TyVar a `TyArr` TyVar c))
 
---TODO: Once String type is no longer a collection, these don't have to be in overload order anymore.
 prims :: [Prim]
 prims =
   -- Pipeline plumbing
@@ -97,8 +99,8 @@ prims =
     monoPrim "lines"      (TyStrT :-> TyListT TyStrT) (k1 T.lines),
     monoPrim "unlines"    (TyListT TyStrT :-> TyStrT) (k1 T.unlines),
     -- Scalar string ops
-    monoPrim "uppercase"  (TyStrT :-> TyStrT) (k1 $ T.toUpper),
-    monoPrim "lowercase"  (TyStrT :-> TyStrT) (k1 $ T.toLower),
+    monoPrim "uppercase"  (TyStrT :-> TyStrT) (k1 T.toUpper),
+    monoPrim "lowercase"  (TyStrT :-> TyStrT) (k1 T.toLower),
     monoPrim "inspect"    (TyStrT :-> TyListT TyStrT) (k1 $ map (T.pack . ICU.charName) . T.unpack),
     -- Char ops -- pair these with map/filter to work per character
     monoPrim "upcaseChar"   (TyCharT :-> TyCharT) (k1 toUpper),
@@ -117,9 +119,6 @@ prims =
     Prim "match" (monoScheme matchTy) implMatch,
     -- group: retrieves a previous capture group recorded by the most recent `match`
     Prim "group" (monoScheme groupTy) implGroup,
-    -- TODO: Remove these, dollar refs should desugar to group(n) directly
-    Prim "$1" (monoScheme dollarTy) (implDollar 1),
-    Prim "$2" (monoScheme dollarTy) (implDollar 2),
     monoPrim "take" (TyIntT :-> TyStrT :-> TyStrT) (k2 T.take),
     Prim
       "take"
@@ -146,10 +145,9 @@ prims =
       (Scheme [a] $ TyList (TyVar a) `TyArr` TyList (TyVar a))
       implReverse,
     -- Char-wise map/filter specialized for String.
-    -- Char ops are Kleisli - have to thread the effect with mapM/filterM
     monoPrim "map"
       ((TyCharT :-> TyCharT) :-> TyStrT :-> TyStrT)
-      (\f -> pure (\s -> T.pack <$> mapM f (T.unpack s))),
+      (onStr mapM),
     Prim
       "map"
       -- (a -> b) -> [a] -> [b]
@@ -160,7 +158,7 @@ prims =
       implMap,
     monoPrim "filter"
       ((TyCharT :-> TyBoolT) :-> TyStrT :-> TyStrT)
-      (\p -> pure (\s -> T.pack <$> filterM p (T.unpack s))),
+      (onStr filterM),
     Prim
       "filter"
       -- (a -> b) -> [a] -> [a]
@@ -218,10 +216,6 @@ matchTy = TyRegexT :-> TyStrT :-> TyStrT
 
 groupTy :: Ty (Int -> Interp (T.Text -> Interp T.Text))
 groupTy = TyIntT :-> TyStrT :-> TyStrT
-
--- `$1`/`$2` are `group` with the index already supplied: just `String -> String`.
-dollarTy :: Ty (T.Text -> Interp T.Text)
-dollarTy = TyStrT :-> TyStrT
 
 -- Polymorphic-prim dispatchers. 
 -- Each pattern-matches the requested Ty to recover the witnesses for the type variables, 
@@ -296,12 +290,6 @@ implGroup :: forall t. Ty t -> Maybe t
 implGroup ty = do
   Refl <- cmpTy ty groupTy
   pure (\n -> pure (\_ -> readGroup n))
-
--- $1 / $2: read a fixed group index, ignoring the piped-in value.
-implDollar :: forall t. Int -> Ty t -> Maybe t
-implDollar n ty = do
-  Refl <- cmpTy ty dollarTy
-  pure (\_ -> readGroup n)
 
 -- Read the n-th group recorded by the most recent `match`, "" if out of range.
 readGroup :: Int -> Interp T.Text

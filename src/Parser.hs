@@ -155,18 +155,21 @@ atom = choice
   , uncurry UChar  <$> charLitSpan
   , uncurry UInt   <$> intLitSpan
   , uncurry UBool  <$> boolLitSpan
-  , uncurry UVar   <$> dollarRefSpan
+  , uncurry dollarRef <$> dollarRefSpan
   , uncurry UVar   <$> identifierSpan
   , parens expr
   ]
 
+dollarRef :: Span -> Int -> UTerm
+dollarRef sp ix = UApp (UVar sp "group") (UInt sp ix)
+
 -- Dollar ref, like `$1`, `$2`
 -- Resolves to most recent capture groups
-dollarRefSpan :: Parser (Span, Name)
+dollarRefSpan :: Parser (Span, Int)
 dollarRefSpan = spanned $ do
   void (char '$')
-  n <- some digitChar
-  pure ('$' : n)
+  d <- digitChar
+  pure $ read [d]
 
 boolLitSpan :: Parser (Span, Bool)
 boolLitSpan = spanned $
