@@ -100,3 +100,6 @@ spec = do
 
     it "yields empty string for an out-of-range group" $
       runProgram "match(/o/) |> group(5)" "hello world" `shouldBe` Right "\"\""
+
+    it "works with dollarRef group shorthand" $
+      runProgram "match(/(.)/) |> $1" "hi" `shouldBe` Right "\"h\""
