@@ -9,6 +9,7 @@ module Core
   , tyToUType
   , showTy
   , pattern (:->)
+  , pattern (::->)
   )
 where
 
@@ -39,6 +40,10 @@ deriving instance Show (Ty t)
 infixr 1 :->
 pattern (:->) :: () => (t ~ (a -> Interp b)) => Ty a -> Ty b -> Ty t
 pattern a :-> b = TyArrT a b
+
+infixr 1 ::->
+pattern (::->) :: () => (t ~ (a -> Interp b)) => UType -> UType -> UType
+pattern a ::-> b = TyArr a b
 
 -- de Bruijn index, type-aware.
 data Var g t where

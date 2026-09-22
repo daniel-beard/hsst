@@ -78,9 +78,7 @@ onStr h = k1 (\g s -> T.pack <$> h g (T.unpack s))
 -- (a -> b) -> (b -> c) -> (a -> c). Shared by `compose` and the `|>` operator.
 composeScheme :: Scheme
 composeScheme =
-  Scheme [a, b, c] $
-    (TyVar a `TyArr` TyVar b)
-      `TyArr` ((TyVar b `TyArr` TyVar c) `TyArr` (TyVar a `TyArr` TyVar c))
+  Scheme [a, b, c] $ (TyVar a ::-> TyVar b) ::-> (TyVar b ::-> TyVar c) ::-> (TyVar a ::-> TyVar c)
 
 prims :: [Prim]
 prims =
@@ -92,7 +90,7 @@ prims =
     -- tee: render the current value (Show-style, to the Writer) and pass it through.
     Prim
       "tee"
-      (Scheme [a] $ TyVar a `TyArr` TyVar a) implTee,
+      (Scheme [a] $ TyVar a ::-> TyVar a) implTee,
     -- String <-> [String]. A String is [Char]. The polymorphic list ops below also apply.
     monoPrim "words"      (TyStrT :-> TyListT TyStrT) (k1 T.words),
     monoPrim "unwords"    (TyListT TyStrT :-> TyStrT) (k1 T.unwords),
@@ -123,26 +121,26 @@ prims =
     Prim
       "take"
       -- Int -> [a] -> [a]
-      (Scheme [a] $ TyInt `TyArr` (TyList (TyVar a) `TyArr` TyList (TyVar a)))
+      (Scheme [a] $ TyInt ::-> (TyList (TyVar a) ::-> TyList (TyVar a)))
       implTake,
     monoPrim "drop" (TyIntT :-> TyStrT :-> TyStrT) (k2 T.drop),
     Prim
       "drop"
       -- Int -> [a] -> [a]
-      (Scheme [a] $ TyInt `TyArr` (TyList (TyVar a) `TyArr` TyList (TyVar a)))
+      (Scheme [a] $ TyInt ::-> (TyList (TyVar a) ::-> TyList (TyVar a)))
       implDrop,
     monoPrim "length" (TyStrT :-> TyIntT) (k1 T.length),
     Prim
       "length"
       -- [a] -> Int
-      (Scheme [a] $ TyList (TyVar a) `TyArr` TyInt)
+      (Scheme [a] $ TyList (TyVar a) ::-> TyInt)
       implLength,
     -- Grapheme cluster aware reverse specialized for String
     monoPrim "reverse" (TyStrT :-> TyStrT) (k1 graphemeReverse),
     -- `[a] -> [a]` element-wise reverse
     Prim
       "reverse"
-      (Scheme [a] $ TyList (TyVar a) `TyArr` TyList (TyVar a))
+      (Scheme [a] $ TyList (TyVar a) ::-> TyList (TyVar a))
       implReverse,
     -- Char-wise map/filter specialized for String.
     monoPrim "map"
@@ -152,8 +150,7 @@ prims =
       "map"
       -- (a -> b) -> [a] -> [b]
       (Scheme [a, b] $
-          (TyVar a `TyArr` TyVar b)
-            `TyArr` (TyList (TyVar a) `TyArr` TyList (TyVar b))
+          (TyVar a ::-> TyVar b) ::-> (TyList (TyVar a) ::-> TyList (TyVar b))
       )
       implMap,
     monoPrim "filter"
@@ -163,8 +160,7 @@ prims =
       "filter"
       -- (a -> b) -> [a] -> [a]
       (Scheme [a] $
-          (TyVar a `TyArr` TyBool)
-            `TyArr` (TyList (TyVar a) `TyArr` TyList (TyVar a))
+          (TyVar a ::-> TyBool) ::-> (TyList (TyVar a) ::-> TyList (TyVar a))
       )
       implFilter,
     -- Int ops

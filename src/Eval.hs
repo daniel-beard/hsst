@@ -2,6 +2,7 @@ module Eval
   ( Env(..)
   , eval
   , render
+  , renderOutput
   ) where
 
 import qualified Data.Text as T
@@ -50,4 +51,16 @@ render ty x = case ty of
   TyRegexT         -> "<regex>"
   TyListT TyCharT  -> T.show x
   TyListT a        -> "[" <> T.intercalate "," (map (render a) x) <> "]"
+  TyArrT _ _       -> "<function : " <> showTy ty <> ">"
+
+renderOutput :: Ty t -> t -> T.Text
+renderOutput ty x = case ty of
+  TyCharT          -> T.singleton x
+  TyStrT           -> x
+  TyIntT           -> T.show x
+  TyBoolT          -> if x then "true" else "false"
+  --TODO: Better render representation?
+  TyRegexT         -> "<regex>"
+  TyListT TyCharT  -> T.show x
+  TyListT a        -> T.intercalate "\n" (map (renderOutput a) x)
   TyArrT _ _       -> "<function : " <> showTy ty <> ">"

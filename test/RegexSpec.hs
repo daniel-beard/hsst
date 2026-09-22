@@ -90,16 +90,16 @@ spec = do
 
   describe "match / group" $ do
     it "returns the whole match (group 0) as a stdin filter" $
-      runProgram "match(/(o\\s)/)" "hello world" `shouldBe` Right "\"o \""
+      runProgram "match(/(o\\s)/)" "hello world" `shouldBe` Right "o "
 
     it "retrieves a capture group recorded by a previous match" $
-      runProgram "match(/(o)(\\s)/) |> group(1)" "hello world" `shouldBe` Right "\"o\""
+      runProgram "match(/(o)(\\s)/) |> group(1)" "hello world" `shouldBe` Right "o"
 
     it "retrieves the second capture group" $
-      runProgram "match(/(o)(\\s)/) |> group(2)" "hello world" `shouldBe` Right "\" \""
+      runProgram "match(/(o)(\\s)/) |> group(2)" "hello world" `shouldBe` Right " "
 
     it "yields empty string for an out-of-range group" $
-      runProgram "match(/o/) |> group(5)" "hello world" `shouldBe` Right "\"\""
+      runProgram "match(/o/) |> group(5)" "hello world" `shouldBe` Right ""
 
     it "works with dollarRef group shorthand" $
-      runProgram "match(/(.)/) |> $1" "hi" `shouldBe` Right "\"h\""
+      runProgram "match(/(.)/) |> $1" "hi" `shouldBe` Right "h"

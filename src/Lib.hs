@@ -13,7 +13,7 @@ import Infer    (inferProgram)
 import Interp   (Interp, InterpR(..), InterpW, runInterp)
 import Elaborate (elaborateClosed)
 import Core
-import Eval     (Env(..), eval, render)
+import Eval     (Env(..), eval, renderOutput)
 import qualified Prims
 
 
@@ -42,9 +42,9 @@ runProgramWithLog src stdin_ = do
       TyStrT :-> ret -> do
         f <- eval ENil term
         r <- f stdin_
-        pure (render ret r)
+        pure (renderOutput ret r)
       -- Otherwise, eval as is
       _ -> do
         v <- eval ENil term
-        pure (render ty v)
+        pure (renderOutput ty v)
 

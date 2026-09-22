@@ -17,7 +17,6 @@ import Data.Set (Set)
 
 import Syntax
 import Diagnostics (Span, Diagnostic(..), noSpan)
-import qualified Syntax as Defer
 
 -- A type scheme: forall vars. ty.
 data Scheme = Scheme [TVar] UType

@@ -9,7 +9,7 @@ spec = do
   describe "runProgram" $ do
     it "headline" $
       runProgram "words |> map(uppercase) |> take(2) |> map(base64) |> map(unbase64)" "hello world"
-        `shouldBe` Right "[\"HELLO\",\"WORLD\"]"
+        `shouldBe` Right "HELLO\nWORLD"
 
     it "let-polymorphism" $
       -- id is used at type (String -> String) once and at type
@@ -19,11 +19,11 @@ spec = do
 
     it "nested lets correctly use de Bruijn indices" $
       runProgram "let a = \\x -> x in a |> words |> let a = reverse in a |> unwords" "a b"
-        `shouldBe` Right "\"b a\""
+        `shouldBe` Right "b a"
 
     it "lambda inside map" $
       runProgram "words |> map(\\s -> uppercase(s))" "ab cd"
-        `shouldBe` Right "[\"AB\",\"CD\"]"
+        `shouldBe` Right "AB\nCD"
 
     it "literal program (no stdin function)" $
       runProgram "42" ""
@@ -52,11 +52,11 @@ spec = do
       -- "café" - The 'e' here is 'e' + U+0301 (multi-code-point grapheme cluster.)
       -- Grapheme reverse keeps "e\769" together, where an element-wise reverse would come out invalid `"\769efac"`
       runProgram "reverse" "cafe\769"
-        `shouldBe` Right (T.show ("e\769fac" :: T.Text))
+        `shouldBe` Right ("e\769fac" :: T.Text)
 
     it "picks the [a] -> [a] overload when piped a list of strings" $
       runProgram "words |> reverse" "a b c"
-        `shouldBe` Right "[\"c\",\"b\",\"a\"]"
+        `shouldBe` Right "c\nb\na"
 
     it "reports no matching overload when no implementation fits the type" $
       runProgram "reverse(42)" ""
