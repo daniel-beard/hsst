@@ -36,7 +36,7 @@ spec = describe "strings & chars" $ do
         `shouldBe` Right "ab"
 
     it "map a char op over a string" $
-      runProgram "map(upcaseChar)" "abc"
+      runProgram "map(uppercase)" "abc"
         `shouldBe` Right "ABC"
 
     it "a top-level function defaults its input to String (stdin filter)" $
@@ -45,11 +45,11 @@ spec = describe "strings & chars" $ do
 
   describe "chars" $ do
     it "char literals have type Char and render quoted" $
-      runProgram "upcaseChar('a')" ""
+      runProgram "uppercase('a')" ""
         `shouldBe` Right "A"
 
     it "& feeds a char value into a function" $
-      runProgram "'a' & upcaseChar" ""
+      runProgram "'a' & uppercase" ""
         `shouldBe` Right "A"
 
     it "charName outputs the correct name for ascii" $

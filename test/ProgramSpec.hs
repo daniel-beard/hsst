@@ -102,24 +102,24 @@ spec = do
     it "suggests & when the left operand of |> is a value" $
       -- `|>` is composition, so its left side must be a function; a value there
       -- is almost certainly meant as `&` (value application).
-      runProgram "'c' |> upcaseChar" ""
+      runProgram "'c' |> uppercase" ""
         `shouldBe` Left
           (T.unlines
              [ "error: expected a function, but got Char; |> composes functions -- use & to apply a value to a function"
              , " --> <arg>:1:5"
              , "  |"
-             , "1 | 'c' |> upcaseChar"
+             , "1 | 'c' |> uppercase"
              , "  |     ^^ did you mean & ?"
              ])
 
     it "reports a plain not-a-function error away from |> (no & hint)" $
-      runProgram "compose('c', upcaseChar)" ""
+      runProgram "compose('c', uppercase)" ""
         `shouldBe` Left
           (T.unlines
              [ "error: expected a function, but got Char"
              , " --> <arg>:1:9"
              , "  |"
-             , "1 | compose('c', upcaseChar)"
+             , "1 | compose('c', uppercase)"
              , "  |         ^^^ not a function"
              ])
 
