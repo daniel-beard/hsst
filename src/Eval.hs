@@ -59,8 +59,8 @@ renderOutput ty x = case ty of
   TyStrT           -> x
   TyIntT           -> T.show x
   TyBoolT          -> if x then "true" else "false"
-  --TODO: Better render representation?
-  TyRegexT         -> "<regex>"
   TyListT TyCharT  -> T.show x
   TyListT a        -> T.intercalate "\n" (map (renderOutput a) x)
+  -- Unreachable: `Lib.checkRunnable` rejects unprintable output types before evaluation.
+  TyRegexT         -> "<regex>"
   TyArrT _ _       -> "<function : " <> showTy ty <> ">"

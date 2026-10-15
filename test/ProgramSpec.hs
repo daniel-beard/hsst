@@ -123,6 +123,50 @@ spec = do
              , "  |         ^^^ not a function"
              ])
 
+    it "rejects a top-level function that isn't a stdin filter" $
+      runProgram "take" ""
+        `shouldBe` Left
+          (T.unlines
+             [ "error: program has type Int -> String -> String, which can't run: it must be a value or a stdin filter (String -> a)"
+             , " --> <arg>:1:1"
+             , "  |"
+             , "1 | take"
+             , "  | ^^^^ not runnable"
+             ])
+
+    it "rejects a stdin filter whose output is a function" $
+      runProgram "\\s -> plus" ""
+        `shouldBe` Left
+          (T.unlines
+             [ "error: program output has type Int -> Int -> Int, which can't be printed; is it missing an argument?"
+             , " --> <arg>:1:7"
+             , "  |"
+             , "1 | \\s -> plus"
+             , "  |       ^^^^ can't print"
+             ])
+
+    it "rejects a bare regex" $
+      runProgram "/foo/" ""
+        `shouldBe` Left
+          (T.unlines
+             [ "error: program output has type Regex, which can't be printed; use it with matches or match"
+             , " --> <arg>:1:1"
+             , "  |"
+             , "1 | /foo/"
+             , "  | ^^^^^ can't print"
+             ])
+
+    it "rejects a list of regexes from a stdin filter" $
+      runProgram "words |> map(\\w -> /a/)" "a b"
+        `shouldBe` Left
+          (T.unlines
+             [ "error: program output has type [Regex], which can't be printed; use it with matches or match"
+             , " --> <arg>:1:1"
+             , "  |"
+             , "1 | words |> map(\\w -> /a/)"
+             , "  | ^^^^^^^^^^^^^^^^^^^^^^ can't print"
+             ])
+
     it "points an ambiguous top-level type (from elaboration) at the expression" $
       -- `compose` expects a function as input, so a program that is only compose is ambiguous
       runProgram "compose" ""

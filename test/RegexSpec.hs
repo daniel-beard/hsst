@@ -56,13 +56,12 @@ spec = do
     it "rejects an unterminated literal" $
       shouldFail "/abc"
 
-  --TODO: Probably want a better representation than `<regex>` here. Address later.
   describe "regex compilation" $ do
     it "compiles a valid pattern to a regex value" $
-      runProgram "/.*/" "" `shouldBe` Right "<regex>"
+      runProgram "matches(/.*/)" "" `shouldBe` Right "true"
 
     it "compiles a digit class to a regex value" $
-      runProgram "/\\d+/" "" `shouldBe` Right "<regex>"
+      runProgram "matches(/\\d+/)" "a12" `shouldBe` Right "true"
 
     it "reports an invalid pattern as a compile error" $
       case runProgram "/[a/" "" of
