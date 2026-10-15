@@ -72,7 +72,7 @@ k2 :: (a -> b -> c) -> (a -> Interp (b -> Interp c))
 k2 f x = pure $ k1 $ f x
 
 -- Lift a [Char] threading kleisli (mapM, filterM, …) on Text
-onStr :: (g -> [Char] -> Interp [Char]) -> (g -> Interp (T.Text -> Interp T.Text))
+onStr :: (g -> [Char] ~> [Char]) -> (g ~> T.Text ~> T.Text)
 onStr h = k1 (\g s -> T.pack <$> h g (T.unpack s))
 
 -- (a -> b) -> (b -> c) -> (a -> c). Shared by `compose` and the `|>` operator.
@@ -101,8 +101,8 @@ prims =
     monoPrim "lowercase"  (TyStrT :-> TyStrT) (k1 T.toLower),
     monoPrim "inspect"    (TyStrT :-> TyListT TyStrT) (k1 $ map (T.pack . ICU.charName) . T.unpack),
     -- Char ops -- pair these with map/filter to work per character
-    monoPrim "upcaseChar"   (TyCharT :-> TyCharT) (k1 toUpper),
-    monoPrim "downcaseChar" (TyCharT :-> TyCharT) (k1 toLower),
+    monoPrim "uppercase"  (TyCharT :-> TyCharT) (k1 toUpper),
+    monoPrim "lowercase"  (TyCharT :-> TyCharT) (k1 toLower),
     -- Unicode character name, e.g. 'a' -> "LATIN SMALL LETTER A".
     -- "" for unnamed code points.
     monoPrim "charName"   (TyCharT :-> TyStrT) (k1 (T.pack . ICU.charName)),
@@ -170,6 +170,9 @@ prims =
     monoPrim "not" (TyBoolT :-> TyBoolT) (k1 Prelude.not)
   ]
 
+type a ~> b = a -> Interp b
+infixr 1 ~>
+
 -- Map of names to type scheme lists, so prims can be overloaded.
 primSchemes :: Map Name [Scheme]
 primSchemes = Map.fromListWith (flip (++)) [(primName_ p, [primScheme_ p]) | p <- prims]
@@ -207,14 +210,14 @@ b64decode s = case B64.decode (TE.encodeUtf8 s) of
 
 -- Concrete types for the regex group prims (also the single source for their inference schemes via `monoScheme`). 
 -- The index is the Kleisli runtime type: each source-level arrow contributes an `Interp` in the value's type.
-matchTy :: Ty (Regex -> Interp (T.Text -> Interp T.Text))
+matchTy :: Ty (Regex ~> T.Text ~> T.Text)
 matchTy = TyRegexT :-> TyStrT :-> TyStrT
 
-groupTy :: Ty (Int -> Interp (T.Text -> Interp T.Text))
+groupTy :: Ty (Int ~> T.Text ~> T.Text)
 groupTy = TyIntT :-> TyStrT :-> TyStrT
 
--- Polymorphic-prim dispatchers. 
--- Each pattern-matches the requested Ty to recover the witnesses for the type variables, 
+-- Polymorphic-prim dispatchers.
+-- Each pattern-matches the requested Ty to recover the witnesses for the type variables,
 -- then returns a fully monomorphic runtime value.
 -- Arrows in the result are kleisli arrows in `Interp`
 -- (`compose` becomes kleisli composition, `map` becomes `mapM`, etc.)
@@ -288,7 +291,7 @@ implGroup ty = do
   pure (\n -> pure (\_ -> readGroup n))
 
 -- Read the n-th group recorded by the most recent `match`, "" if out of range.
-readGroup :: Int -> Interp T.Text
+readGroup :: Int ~> T.Text
 readGroup n = do
   InterpS gs <- get
   pure (if n >= 0 && n < length gs then gs !! n else "")

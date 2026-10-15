@@ -22,7 +22,7 @@ Under the hood the pipeline is `parse → resolve to de Bruijn indices → infer
 ⚠️ This is under-documented, and will remain so until the core language design has settled down a bit. It's all very experimental.
 
 A non-complete list of primitives:
-- `Int`, `Bool`, `Char`, `List a`, `String` (actually `[Char]`), `Regex`
+- `Int`, `Bool`, `Char`, `List a`, `String`, `Regex`
 - map/filter/take/reverse
 
 ## Usage examples

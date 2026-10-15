@@ -42,7 +42,7 @@ pattern (:->) :: () => (t ~ (a -> Interp b)) => Ty a -> Ty b -> Ty t
 pattern a :-> b = TyArrT a b
 
 infixr 1 ::->
-pattern (::->) :: () => (t ~ (a -> Interp b)) => UType -> UType -> UType
+pattern (::->) :: UType -> UType -> UType
 pattern a ::-> b = TyArr a b
 
 -- de Bruijn index, type-aware.

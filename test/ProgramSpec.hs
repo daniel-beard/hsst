@@ -58,12 +58,18 @@ spec = do
       runProgram "words |> reverse" "a b c"
         `shouldBe` Right "c\nb\na"
 
+    it "resolves an overload from its argument before defaulting to a stdin filter" $
+      -- the program's type is only decided by picking `uppercase :: Char -> Char`
+      -- defaulting it to `String -> a` would mean it's ambiguous
+      runProgram "'a' & uppercase" ""
+        `shouldBe` Right "A"
+
     it "reports no matching overload when no implementation fits the type" $
       runProgram "reverse(42)" ""
         `shouldBe` Left
           --TODO: I need better way not to have to include the unmatched type-var in these...
           (T.unlines
-             [ "error: no implementation of reverse for type Int -> String -> t1002"
+             [ "error: no implementation of reverse for type Int -> t1000"
              , " --> <arg>:1:1"
              , "  |"
              , "1 | reverse(42)"

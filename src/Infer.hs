@@ -235,15 +235,17 @@ inferProgram prims t0 =
   where
     go = do
       (s, ty, ann) <- infer prims [] (elimLets t0)
-      -- Default to stdin filter type (String)
-      -- This allows a polymorphic list prim to run directly on stdin for now.
-      -- Otherwise just render as a function.
-      sIn <- defaultStdin (applyTy s ty)
-      let s1 = sIn `composeS` s
-      -- Resolve any outstanding overloads to concrete schemes
+      -- Resolve the program first.
+      -- Need to be able to handle things like `'a' & uppercase`, which only `uppercase :: Char -> Char` decides
       ovs <- gets isOverloads
-      s2 <- resolveOverloads s1 ovs
-      pure (applyAnn s2 ann)
+      (s1, stuck) <- resolveOverloads s ovs
+      -- Default to stdin filter type (String)
+      sIn <- defaultStdin (applyTy s1 ty)
+      -- Anything still tied must be decided by the stdin default, or it's ambiguous.
+      (s2, stuck') <- resolveOverloads (sIn `composeS` s1) stuck
+      case stuck' of
+        []       -> pure (applyAnn s2 ann)
+        (ov : _) -> ambiguousOverload ov (applyTy s2 (ovTy ov))
 
     defaultStdin ty = case ty of
       TyArr dom _ ->
@@ -259,17 +261,17 @@ inferProgram prims t0 =
 -- Substitutions are carried forward, so that an occurence can resolve another in a future pass.
 -- Stops when:
 -- - Nothing left to resolve
--- - No progress being made (overload is ambiguous)
-resolveOverloads :: Subst -> [Overload] -> Infer Subst
+-- - No progress being made, returning the still-tied occurrences
+resolveOverloads :: Subst -> [Overload] -> Infer (Subst, [Overload])
 resolveOverloads s0 = loop s0
   where
     loop subst pending = do
       (subst', deferred, progressed) <- foldM step (subst, [], False) pending
       case deferred of
-        []          -> pure subst'
-        (ov : _)
+        []          -> pure (subst', [])
+        _
           | progressed -> loop subst' (reverse deferred)
-          | otherwise  -> ambiguous ov (applyTy subst' (ovTy ov))
+          | otherwise  -> pure (subst', reverse deferred)
 
     -- Try to resolve one occurrence under the substitution accumulated so far.
     step (subst, deferred, progressed) ov = do
@@ -294,10 +296,11 @@ resolveOverloads s0 = loop s0
       ("no implementation of " <> T.pack (ovName ov) <> " for type " <> prettyUType t)
       "no matching overload"
 
-    ambiguous ov t = failAt (ovSpan ov)
-      ("ambiguous overloaded use of " <> T.pack (ovName ov) <> " at type " <> prettyUType t
-        <> " (more than one implementation fits)")
-      "ambiguous overload"
+ambiguousOverload :: Overload -> UType -> Infer a
+ambiguousOverload ov t = failAt (ovSpan ov)
+  ("ambiguous overloaded use of " <> T.pack (ovName ov) <> " at type " <> prettyUType t
+    <> " (more than one implementation fits)")
+  "ambiguous overload"
 
 -- Matching scheme to candidate scheme. In order of worst to preferred match.
 data SchemeMatch = NoMatch | TieMatch | UniqueMatch Subst
