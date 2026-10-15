@@ -43,6 +43,11 @@ runProgramWithLog src stdin_ = do
         f <- eval ENil term
         r <- f stdin_
         pure (renderOutput ret r)
+      -- [Char] -> a, from a list-generic prim with no String overload. Feed stdin as chars.
+      TyListT TyCharT :-> ret -> do
+        f <- eval ENil term
+        r <- f (T.unpack stdin_)
+        pure (renderOutput ret r)
       -- Otherwise, eval as is
       _ -> do
         v <- eval ENil term

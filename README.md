@@ -1,7 +1,7 @@
 # hsst
 
 hsst is a tiny, statically-typed, pipeline-oriented scripting language for transforming text on stdin.
-The standard mode is run as a filter over stdin or pasteboard contents `String -> a`
+The standard mode is run as a filter over stdin or pasteboard contents `String -> a` (or `[Char] -> a` when only a list-generic prim fits)
 
 - Single expression: `words |> map(uppercase) |> take(2) |> unwords`
 - `|>` is left-to-right composition

@@ -39,6 +39,10 @@ spec = describe "strings & chars" $ do
       runProgram "map(uppercase)" "abc"
         `shouldBe` Right "ABC"
 
+    it "map a non-Char char op over stdin runs as a [Char] filter" $
+      runProgram "map(codePoint)" "café"
+        `shouldBe` Right "U+0063\nU+0061\nU+0066\nU+00E9"
+
     it "a top-level function defaults its input to String (stdin filter)" $
       runProgram "\\x -> x" "passthrough"
         `shouldBe` Right "passthrough"

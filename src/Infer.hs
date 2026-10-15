@@ -248,8 +248,11 @@ inferProgram prims t0 =
         (ov : _) -> ambiguousOverload ov (applyTy s2 (ovTy ov))
 
     defaultStdin ty = case ty of
+      -- Prefer String, fall back to [Char] so list-generic prims (e.g. `map(codePoint)`) still run on stdin.
       TyArr dom _ ->
-        unify noSpan dom TyStr `catchError` \_ -> pure emptySubst
+        unify noSpan dom TyStr
+          `catchError` (\_ -> unify noSpan dom (TyList TyChar))
+          `catchError` (\_ -> pure emptySubst)
       -- Whole program is a bare type var, make it a String filter.
       TyVar _ -> do
         b <- freshTy
