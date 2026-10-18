@@ -12,6 +12,7 @@ module Syntax
     UType (..),
     TVar,
     prettyUType,
+    prettyUTypeWith,
     prettyUTerm,
     prettyIxTerm,
     -- de Bruijn shift + substitution
@@ -128,10 +129,14 @@ substIx k0 s0 = go k0 s0
       ILet sp r b -> ILet sp (go k s r) (go (k + 1) (shiftIx 1 0 s) b)
 
 prettyUType :: UType -> T.Text
-prettyUType = go (0 :: Int)
+prettyUType = prettyUTypeWith (\n -> "t" <> T.show n)
+
+-- Same printer, with a caller-chosen name for type variables (e.g. `a`, `b` for schemes).
+prettyUTypeWith :: (TVar -> T.Text) -> UType -> T.Text
+prettyUTypeWith varName = go (0 :: Int)
   where
     go :: Int -> UType -> T.Text
-    go _ (TyVar n)       = "t" <> T.show n
+    go _ (TyVar n)       = varName n
     go _ TyChar          = "Char"
     go _ TyInt           = "Int"
     go _ TyBool          = "Bool"
