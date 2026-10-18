@@ -80,7 +80,7 @@ charLitSpan = spanned $ do
       "a Char literal must be a single unicode code point \
       \multi-code-point graphemes should use a string literal \"..\" instead"
 
--- Regex literal: `/{body}/`. 
+-- Regex literal: `/{body}/`.
 -- No escape handling like strings except for `\/` (literal slash).
 regexLitSpan :: Parser (Span, String)
 regexLitSpan = spanned $ do
@@ -92,8 +92,8 @@ regexLitSpan = spanned $ do
       <|> (\b -> ['\\', b]) <$> (char '\\' *> anySingle)     -- keep any other `\x`
       <|> (\c -> [c])       <$> noneOf ("/\\" :: String)
 
--- Backslash escapes shared by string and char literals. `extra` is the
--- delimiter that also needs escaping (`"` in strings, `'` in chars).
+-- Backslash escapes shared by string and char literals. 
+-- `extra` is the delimiter that also needs escaping (`"` in strings, `'` in chars).
 escape :: String -> Parser Char
 escape extra = char '\\' *> choice
   ( [ '\n' <$ char 'n'
@@ -114,8 +114,9 @@ parseProgram src =
     Left err  -> Left (errorBundlePretty err)
     Right e   -> Right e
 
--- Lowest precedence, left-associative: forward composition `|>` and value
--- application `&`. Both chain left-to-right, e.g. `x & f & g` is `g(f(x))`.
+-- Lowest precedence, left-associative:
+-- forward composition `|>` and value application `&`.
+-- Both chain left-to-right, e.g. `x & f & g` is `g(f(x))`.
 expr :: Parser UTerm
 expr = do
   e0 <- appExpr
@@ -135,7 +136,7 @@ expr = do
 -- f |> g  desugars to an application of the `|>` primitive (which behaves exactly like `compose`)
 -- Distinct from `compose` allows suggesting `&` when the left operand is a value, not a function.
 pipe :: Span -> UTerm -> UTerm -> UTerm
-pipe sp f g = UApp (UApp (UVar sp "|>") f) g
+pipe sp f = UApp (UApp (UVar sp "|>") f)
 
 -- Application: an atom followed by zero or more `(...)` argument lists.
 appExpr :: Parser UTerm

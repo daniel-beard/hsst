@@ -260,31 +260,44 @@ inferProgram prims t0 =
       _ -> pure emptySubst
 
 -- Resolve deferred overloads
--- Each pass attempts to resolve to a unique, most specific scheme.
 -- Substitutions are carried forward, so that an occurence can resolve another in a future pass.
--- Stops when:
--- - Nothing left to resolve
--- - No progress being made, returning the still-tied occurrences
+-- Two phases:
+-- 1. Forced: only resolve occurrences where exactly one candidate fits. Repeat while that makes progress.
+-- 2. Preferred: when stuck, resolve the first occurrence that has a unique most specific
+--    candidate, then go back to phase 1, since that choice may force the others.
+--    E.g. in `map(codePoint) |> take(5)` the list `map` is forced, which forces the list `take`.
+--    Picking the most specific `take` first would wrongly pin `map`'s output to String.
+-- Stops when nothing is left to resolve, or neither phase makes progress (returns the still-tied occurrences).
 resolveOverloads :: Subst -> [Overload] -> Infer (Subst, [Overload])
-resolveOverloads s0 = loop s0
+resolveOverloads s0 = forced s0
   where
-    loop subst pending = do
+    forced subst pending = do
       (subst', deferred, progressed) <- foldM step (subst, [], False) pending
-      case deferred of
-        []          -> pure (subst', [])
-        _
-          | progressed -> loop subst' (reverse deferred)
-          | otherwise  -> pure (subst', reverse deferred)
+      let rest = reverse deferred
+      case rest of
+        []             -> pure (subst', [])
+        _ | progressed -> forced subst' rest
+          | otherwise  -> preferred subst' [] rest
 
-    -- Try to resolve one occurrence under the substitution accumulated so far.
+    -- Try to resolve one occurrence, only if exactly one candidate fits.
     step (subst, deferred, progressed) ov = do
+      let t = applyTy subst (ovTy ov)
+      matches <- candidateMatches ov t
+      case matches of
+        []         -> noInstance ov t
+        [(su, _)]  -> pure (su `composeS` subst, deferred, True)
+        -- Defer, might be constrained in a future pass.
+        _          -> pure (subst, ov : deferred, progressed)
+
+    -- Resolve the first occurrence with a unique most specific candidate, then return to phase 1.
+    preferred subst skipped [] = pure (subst, reverse skipped)
+    preferred subst skipped (ov : rest) = do
       let t = applyTy subst (ovTy ov)
       matches <- candidateMatches ov t
       case bestSchemeMatch matches of
         NoMatch        -> noInstance ov t
-        UniqueMatch su -> pure (su `composeS` subst, deferred, True)
-        -- Defer, might be constrained in a future pass.
-        TieMatch       -> pure (subst, ov : deferred, progressed)
+        UniqueMatch su -> forced (su `composeS` subst) (reverse skipped ++ rest)
+        TieMatch       -> preferred subst (ov : skipped) rest
 
     -- Give each scheme fresh vars, then grab each candidate scheme that unifies with this occurrences current type.
     candidateMatches ov t = fmap catMaybes (mapM tryCand (ovCands ov))

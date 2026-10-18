@@ -76,6 +76,16 @@ spec = do
              , "  | ^^^^^^^ no matching overload"
              ])
 
+    it "a later overload doesn't pin an earlier one to the String version" $
+      -- `map(codePoint)` can only be the list map, so `take` must be the list take too.
+      runProgram "map(codePoint |> lowercase) |> take(5)" "hello world"
+        `shouldBe` Right "u+0068\nu+0065\nu+006c\nu+006c\nu+006f"
+
+    it "overloads resolve within map" $
+      runProgram "map(codePoint |> lowercase |> take(1))" "abc"
+        `shouldBe` Right "u\nu\nu"
+
+
   describe "diagnostics" $ do
     it "renders an unbound variable with a rustc-like error format" $
       runProgram "words |> foo" ""
