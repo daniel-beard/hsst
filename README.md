@@ -21,6 +21,18 @@ Under the hood the pipeline is `parse → resolve to de Bruijn indices → infer
 
 ⚠️ This is under-documented, and will remain so until the core language design has settled down a bit. It's all very experimental.
 
+`hsst -h` lists the signatures of a primitive, or every primitive that mentions a type:
+
+```
+> hsst -h uppercase
+uppercase :: String -> String
+uppercase :: Char -> Char
+
+> hsst -h Regex
+match :: Regex -> String -> String
+matches :: Regex -> String -> Bool
+```
+
 A non-complete list of primitives:
 - `Int`, `Bool`, `Char`, `List a`, `String`, `Regex`
 - map/filter/take/reverse

@@ -8,12 +8,18 @@ import System.Exit (exitFailure)
 import System.IO (stderr, stdin, hIsTerminalDevice)
 import System.Process (readProcess)
 
+import Help (help)
 import Lib (runProgramWithLog)
 
 main :: IO ()
 main = do
   args <- getArgs
   case args of
+    -- Signatures of a primitive, or every primitive mentioning a type.
+    -- E.g. `hsst -h String` or `hsst -h map`
+    ["-h", q] -> case help (T.pack q) of
+      Right out -> TIO.putStrLn out
+      Left  err -> TIO.hPutStrLn stderr err >> exitFailure
     [src] -> do
       -- When stdin is piped or passed in, use it.
       -- isTty means nothing to read from stdin, use pasteboard contents in that case.
@@ -27,7 +33,7 @@ main = do
           TIO.putStrLn out
         Left  err -> TIO.hPutStrLn stderr err >> exitFailure
     _ -> do
-      TIO.hPutStrLn stderr "usage: hsst '<program>'"
+      TIO.hPutStrLn stderr "usage: hsst '<program>'\n       hsst -h <primitive | Type>"
       exitFailure
 
 -- pasteboard or empty string.
