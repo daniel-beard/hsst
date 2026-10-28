@@ -16,7 +16,7 @@ where
 import qualified Data.Text as T
 import Data.Type.Equality ((:~:) (Refl))
 import Interp (Interp)
-import Text.Regex.PCRE (Regex)
+import Data.Text.ICU (Regex)
 import Syntax (UType (..), prettyUType)
 
 -- Strongly-typed types. Each constructor's parameter index is a real Haskell type, 

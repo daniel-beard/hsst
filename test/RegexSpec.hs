@@ -102,3 +102,76 @@ spec = do
 
     it "works with dollarRef group shorthand" $
       runProgram "match(/(.)/) |> $1" "hi" `shouldBe` Right "h"
+
+  describe "gsub" $ do
+    it "replaces every match" $
+      runProgram "gsub(/o/, \"0\")" "hello world" `shouldBe` Right "hell0 w0rld"
+
+    it "replaces matches that sit next to each other" $
+      runProgram "gsub(/good/, \"bad\")" "goodgoodgood" `shouldBe` Right "badbadbad"
+
+    it "can delete matches" $
+      runProgram "gsub(/a/, \"\")" "aaa" `shouldBe` Right ""
+
+    it "leaves the input alone when nothing matches" $
+      runProgram "gsub(/z/, \"!\")" "hello" `shouldBe` Right "hello"
+
+    it "treats the replacement literally" $
+      runProgram "gsub(/(a)/, \"\\\\1$1\")" "a" `shouldBe` Right "\\1$1"
+
+    it "ignores empty matches" $
+      runProgram "gsub(/x*/, \"-\")" "abc" `shouldBe` Right "abc"
+
+    it "ignores empty matches around multi-byte characters" $
+      runProgram "gsub(//, \".\")" "hé" `shouldBe` Right "hé"
+
+    it "ignores empty matches around 4-byte characters" $
+      runProgram "gsub(//, \".\")" "a😀b" `shouldBe` Right "a😀b"
+
+    it "replaces non-empty matches of a pattern that can match empty" $
+      runProgram "gsub(/x*/, \"-\")" "xxaxb" `shouldBe` Right "-a-b"
+
+    it "replaces non-empty matches after a multi-byte character" $
+      runProgram "gsub(/x*/, \"-\")" "éxx😀x" `shouldBe` Right "é-😀-"
+
+    it "inserts at the start of the line for /^/" $
+      runProgram "gsub(/^/, \"> \")" "abc" `shouldBe` Right "> abc"
+
+    it "inserts at the start of every line for /^/" $
+      runProgram "gsub(/^/, \"> \")" "a\nb" `shouldBe` Right "> a\n> b"
+
+    it "inserts into an empty line for /^/" $
+      runProgram "gsub(/^/, \"> \")" "" `shouldBe` Right "> "
+
+    it "does not insert after a trailing newline for /^/" $
+      runProgram "gsub(/^/, \"> \")" "a\nb\n" `shouldBe` Right "> a\n> b\n"
+
+    it "appends at the end of the line for /$/" $
+      runProgram "gsub(/$/, \";\")" "abc" `shouldBe` Right "abc;"
+
+    it "appends at the end of every line for /$/" $
+      runProgram "gsub(/$/, \";\")" "a\n\nb" `shouldBe` Right "a;\n;\nb;"
+
+    it "does not append after a trailing newline for /$/" $
+      runProgram "gsub(/$/, \";\")" "a\nb\n" `shouldBe` Right "a;\nb;\n"
+
+    it "appends into an empty line for /$/" $
+      runProgram "gsub(/$/, \";\")" "" `shouldBe` Right ";"
+
+    it "keeps empty matches of a $-anchored pattern" $
+      runProgram "gsub(/x*$/, \"-\")" "abxx\ncd" `shouldBe` Right "ab-\ncd-"
+
+    it "treats an escaped $ as a literal" $
+      runProgram "gsub(/\\$/, \"USD\")" "5$" `shouldBe` Right "5USD"
+
+    it "keeps empty matches of a ^-anchored pattern" $
+      runProgram "gsub(/^x*/, \"-\")" "abc\nxxd" `shouldBe` Right "-abc\n-d"
+
+    it "replaces non-ASCII text" $
+      runProgram "gsub(/é/, \"e\")" "café" `shouldBe` Right "cafe"
+
+  describe "regex compilation offsets" $
+    it "points the caret at the right character after non-ASCII text" $
+      case runProgram "/é[a/" "" of
+        Right out -> expectationFailure ("expected a compile error, got: " ++ T.unpack out)
+        Left err  -> err `shouldSatisfy` ("1:5" `T.isInfixOf`)

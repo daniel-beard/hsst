@@ -27,7 +27,6 @@ ghc-options:
 - -Wredundant-constraints
 
 dependencies:
-- array
 - base >= 4.11 && < 10
 - base64-bytestring
 - bytestring
@@ -35,7 +34,6 @@ dependencies:
 - megaparsec
 - mtl
 - parser-combinators
-- regex-pcre
 - text
 - text-icu
 - vector

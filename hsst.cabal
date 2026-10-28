@@ -89,15 +89,13 @@ library
       ViewPatterns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      array
-    , base >=4.11 && <10
+      base >=4.11 && <10
     , base64-bytestring
     , bytestring
     , containers
     , megaparsec
     , mtl
     , parser-combinators
-    , regex-pcre
     , text
     , text-icu
     , vector
@@ -156,8 +154,7 @@ executable hsst
       ViewPatterns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      array
-    , base >=4.11 && <10
+      base >=4.11 && <10
     , base64-bytestring
     , bytestring
     , containers
@@ -166,7 +163,6 @@ executable hsst
     , mtl
     , parser-combinators
     , process
-    , regex-pcre
     , text
     , text-icu
     , vector
@@ -232,8 +228,7 @@ test-suite hsst-test
   build-tool-depends:
       hspec-discover:hspec-discover
   build-depends:
-      array
-    , base >=4.11 && <10
+      base >=4.11 && <10
     , base64-bytestring
     , bytestring
     , containers
@@ -242,7 +237,6 @@ test-suite hsst-test
     , megaparsec
     , mtl
     , parser-combinators
-    , regex-pcre
     , text
     , text-icu
     , vector

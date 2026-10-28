@@ -8,14 +8,17 @@ where
 import Control.Monad (filterM, (>=>))
 import Control.Monad.RWS.Strict (get, put, tell)
 import Core
-import Data.Array (elems)
 import qualified Data.ByteString.Base64 as B64
 import Data.Char (toLower, toUpper)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import Data.Text.ICU (Regex)
 import qualified Data.Text.ICU as ICUB
+import qualified Data.Text.ICU.Regex as ICUR
+import qualified Data.Text.Unsafe as TU
 import qualified Data.Text.ICU.Char as ICU
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -25,7 +28,7 @@ import Infer (Scheme (..))
 import Interp (Interp, InterpS(..))
 import Syntax
 import Text.Printf
-import Text.Regex.PCRE (Regex, matchOnceText, matchTest)
+import System.IO.Unsafe (unsafePerformIO)
 
 -- Type-variable identifiers used inside primitive schemes. They live in
 -- the same TVar namespace as inference; we just pick small numbers and
@@ -71,6 +74,9 @@ k1 f = pure . f
 k2 :: (a -> b -> c) -> (a -> Interp (b -> Interp c))
 k2 f x = pure $ k1 $ f x
 
+k3 :: (a -> b -> c -> d) -> (a -> Interp (b -> Interp (c -> Interp d)))
+k3 f x = pure $ k2 $ f x
+
 -- Lift a [Char] threading kleisli (mapM, filterM, …) on Text
 onStr :: (g -> [Char] ~> [Char]) -> (g ~> T.Text ~> T.Text)
 onStr h = k1 (\g s -> T.pack <$> h g (T.unpack s))
@@ -111,7 +117,9 @@ prims =
     monoPrim "unbase64"   (TyStrT :-> TyStrT) (k1 b64decode),
     -- Regex ops
     -- Regex first so a partial application `matches(/foo/)` is a String -> Bool
-    monoPrim "matches" (TyRegexT :-> TyStrT :-> TyBoolT) (k2 (\rx s -> matchTest rx (T.unpack s))),
+    monoPrim "matches" (TyRegexT :-> TyStrT :-> TyBoolT) (k2 (\rx s -> isJust (ICUB.find rx s))),
+    -- Regex -> Replacement -> Text to operate on -> Return
+    monoPrim "gsub" (TyRegexT :-> TyStrT :-> TyStrT :-> TyStrT) (k3 gsub),
     -- match - runs the regex, records capture groups in interpreter State. 
     -- returns whole match or "" if no match
     Prim "match" (monoScheme matchTy) implMatch,
@@ -300,11 +308,48 @@ readGroup n = do
 -- 0: the whole match
 -- 1.. the matched groups
 matchGroups :: Regex -> T.Text -> [T.Text]
-matchGroups rx s = case matchOnceText rx (T.unpack s) of
-  Just (_, arr, _) -> map (T.pack . fst) (elems arr)
-  Nothing          -> []
+matchGroups rx s = case ICUB.find rx s of
+  Just m  -> [fromMaybe "" (ICUB.group n m) | n <- [0 .. ICUB.groupCount m]]
+  Nothing -> []
 
---TODO: Move this somewhere else.
+-- Replace every match of the regex with the replacement text (taken literally).
+-- Empty matches are skipped:
+--    - so /x*/ only replaces runs of x.
+-- Empty matches are not skipped when:
+--    - The pattern is anchored with a leading `^` or trailing `$`.
+--      - Matches `sed` behavior - /^/ and /$/ insert at the start or end of every line
+--
+-- text-icu's `findAll` never finishes when the pattern can match the empty string (e.g. /x*/)
+-- so this steps through matches with ICU's `findNext`, which handles them.
+--
+-- Match offsets are UTF-8 byte offsets, which index `Text` directly.
+gsub :: Regex -> T.Text -> T.Text -> T.Text
+gsub rx repl txt = unsafePerformIO $ do
+  r <- ICUR.regex [ICUB.Multiline] pat
+  ICUR.setText r txt
+  -- `from` is where the previous match ended (or 0), and `matched` is whether a match ended there.
+  let go from matched = do
+        found <- ICUR.findNext r
+        if not found
+          then pure [TU.dropWord8 from txt]
+          else do
+            s <- fromIntegral <$> ICUR.start_ r 0
+            e <- fromIntegral <$> ICUR.end_ r 0
+            if s == e && (not lineAnchored || pastLastLine s || (matched && s == from))
+              then go from matched
+              else (\rest -> slice from s : repl : rest) <$> go e True
+  T.concat <$> go 0 False
+  where
+    pat = ICUB.pattern rx
+    lineAnchored = "^" `T.isPrefixOf` pat || endsWithDollar
+    -- A trailing `$` that isn't escaped, i.e. preceded by an even number of `\`.
+    endsWithDollar = case T.unsnoc pat of
+      Just (body, '$') -> even (T.length (T.takeWhileEnd (== '\\') body))
+      _                -> False
+    -- The empty position after a final newline, which ICU counts as a line.
+    pastLastLine pos = pos == TU.lengthWord8 txt && "\n" `T.isSuffixOf` txt
+    slice from to = TU.takeWord8 (to - from) (TU.dropWord8 from txt)
+
 headOr :: a -> [a] -> a
 headOr d []      = d
 headOr _ (x : _) = x
