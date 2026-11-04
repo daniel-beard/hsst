@@ -120,6 +120,30 @@ prims =
     Prim "fst"  (Scheme [a, b] $ tyPair a b ::-> TyVar a) implFst,
     Prim "snd"  (Scheme [a, b] $ tyPair a b ::-> TyVar b) implSnd,
     Prim "swap" (Scheme [a, b] $ tyPair a b ::-> tyPair b a) implSwap,
+    Prim "first"
+      (Scheme [a, b, c] $ (TyVar a ::-> TyVar c) ::-> tyPair a b ::-> tyPair c b)
+      implFirst,
+    Prim "second"
+      (Scheme [a, b, c] $ (TyVar b ::-> TyVar c) ::-> tyPair a b ::-> tyPair a c)
+      implSecond,
+    Prim "bimap"
+      (Scheme [a, b, c, d] $
+          (TyVar a ::-> TyVar c) ::-> (TyVar b ::-> TyVar d) ::-> tyPair a b ::-> tyPair c d)
+      implBimap,
+    Prim "both"
+      (Scheme [a, b] $ (TyVar a ::-> TyVar b) ::-> tyPair a a ::-> tyPair b b)
+      implBoth,
+    -- Run both functions on the same input, left then right.
+    Prim "fanout"
+      (Scheme [a, b, c] $ (TyVar a ::-> TyVar b) ::-> (TyVar a ::-> TyVar c) ::-> TyVar a ::-> tyPair b c)
+      implFanout,
+    Prim "zip"
+      (Scheme [a, b] $ TyList (TyVar a) ::-> TyList (TyVar b) ::-> TyList (tyPair a b))
+      implZip,
+    Prim "unzip"
+      (Scheme [a, b] $ TyList (tyPair a b) ::-> TyPair (TyList (TyVar a)) (TyList (TyVar b)))
+      implUnzip,
+    -- String
     monoPrim "words"      (TyStrT :-> TyListT TyStrT) (k1 T.words),
     monoPrim "unwords"    (TyListT TyStrT :-> TyStrT) (k1 T.unwords),
     monoPrim "lines"      (TyStrT :-> TyListT TyStrT) (k1 T.lines),
@@ -304,12 +328,14 @@ implTee (a1 :-> a2) = do
   pure (\x -> do tell [render a1 x]; pure x)
 implTee _ = Nothing
 
+-- a -> a
 implId :: forall t. Ty t -> Maybe t
 implId (a1 :-> a2) = do
   Refl <- cmpTy a1 a2
   pure (k1 id)
 implId _ = Nothing
 
+-- (a -> b -> c) -> b -> a -> c
 implFlip :: forall t. Ty t -> Maybe t
 implFlip ((a1 :-> b1 :-> c1) :-> b2 :-> a2 :-> c2) = do
   Refl <- cmpTy a1 a2
@@ -326,6 +352,7 @@ pairScheme = Scheme [a, b] $ TyVar a ::-> TyVar b ::-> tyPair a b
 uncurryScheme :: Scheme
 uncurryScheme = Scheme [a, b, c] $ (TyVar a ::-> TyVar b ::-> TyVar c) ::-> tyPair a b ::-> TyVar c
 
+-- a -> b -> (a, b)
 implPair :: forall t. Ty t -> Maybe t
 implPair (a1 :-> b1 :-> TyPairT a2 b2) = do
   Refl <- cmpTy a1 a2
@@ -333,6 +360,7 @@ implPair (a1 :-> b1 :-> TyPairT a2 b2) = do
   pure (k2 (,))
 implPair _ = Nothing
 
+-- (a -> b -> c) -> (a, b) -> c
 implUncurry :: forall t. Ty t -> Maybe t
 implUncurry ((a1 :-> b1 :-> c1) :-> TyPairT a2 b2 :-> c2) = do
   Refl <- cmpTy a1 a2
@@ -341,6 +369,7 @@ implUncurry ((a1 :-> b1 :-> c1) :-> TyPairT a2 b2 :-> c2) = do
   pure $ k1 (\f (x, y) -> f x >>= ($ y))
 implUncurry _ = Nothing
 
+-- ((a, b) -> c) -> a -> b -> c
 implCurry :: forall t. Ty t -> Maybe t
 implCurry ((TyPairT a1 b1 :-> c1) :-> a2 :-> b2 :-> c2) = do
   Refl <- cmpTy a1 a2
@@ -349,24 +378,92 @@ implCurry ((TyPairT a1 b1 :-> c1) :-> a2 :-> b2 :-> c2) = do
   pure (\f -> pure (\x -> pure (\y -> f (x, y))))
 implCurry _ = Nothing
 
+-- (a, b) -> a
 implFst :: forall t. Ty t -> Maybe t
 implFst (TyPairT a1 _ :-> a2) = do
   Refl <- cmpTy a1 a2
   pure (k1 fst)
 implFst _ = Nothing
 
+-- (a, b) -> b
 implSnd :: forall t. Ty t -> Maybe t
 implSnd (TyPairT _ b1 :-> b2) = do
   Refl <- cmpTy b1 b2
   pure (k1 snd)
 implSnd _ = Nothing
 
+-- (a, b) -> (b, a)
 implSwap :: forall t. Ty t -> Maybe t
 implSwap (TyPairT a1 b1 :-> TyPairT b2 a2) = do
   Refl <- cmpTy a1 a2
   Refl <- cmpTy b1 b2
   pure $ k1 (\(x, y) -> (y, x))
 implSwap _ = Nothing
+
+-- (a -> c) -> (a, b) -> (c, b)
+implFirst :: forall t. Ty t -> Maybe t
+implFirst ((a1 :-> c1) :-> TyPairT a2 b1 :-> TyPairT c2 b2) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy b1 b2
+  Refl <- cmpTy c1 c2
+  pure $ k1 (\f (x, y) -> (, y) <$> f x)
+implFirst _ = Nothing
+
+-- (b -> c) -> (a, b) -> (a, c)
+implSecond :: forall t. Ty t -> Maybe t
+implSecond ((b1 :-> c1) :-> TyPairT a1 b2 :-> TyPairT a2 c2) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy b1 b2
+  Refl <- cmpTy c1 c2
+  pure $ k1 (\f (x, y) -> (x, ) <$> f y)
+implSecond _ = Nothing
+
+-- (a -> c) -> (b -> d) -> (a, b) -> (c, d)
+implBimap :: forall t. Ty t -> Maybe t
+implBimap ((a1 :-> c1) :-> (b1 :-> d1) :-> TyPairT a2 b2 :-> TyPairT c2 d2) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy b1 b2
+  Refl <- cmpTy c1 c2
+  Refl <- cmpTy d1 d2
+  pure $ k2 (\f g (x, y) -> (,) <$> f x <*> g y)
+implBimap _ = Nothing
+
+-- (a -> b) -> (a, a) -> (b, b)
+implBoth :: forall t. Ty t -> Maybe t
+implBoth ((a1 :-> b1) :-> TyPairT a2 a3 :-> TyPairT b2 b3) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy a1 a3
+  Refl <- cmpTy b1 b2
+  Refl <- cmpTy b1 b3
+  pure $ k1 (\f (x, y) -> (,) <$> f x <*> f y)
+implBoth _ = Nothing
+
+-- (a -> b) -> (a -> c) -> a -> (b, c)
+implFanout :: forall t. Ty t -> Maybe t
+implFanout ((a1 :-> b1) :-> (a2 :-> c1) :-> a3 :-> TyPairT b2 c2) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy a1 a3
+  Refl <- cmpTy b1 b2
+  Refl <- cmpTy c1 c2
+  pure $ k2 (\f g x -> (,) <$> f x <*> g x)
+implFanout _ = Nothing
+
+-- [a] -> [b] -> [(a, b)]
+implZip :: forall t. Ty t -> Maybe t
+implZip (TyListT a1 :-> TyListT b1 :-> TyListT (TyPairT a2 b2)) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy b1 b2
+  pure (k2 zip)
+implZip _ = Nothing
+
+-- [(a, b)] -> ([a], [b])
+implUnzip :: forall t. Ty t -> Maybe t
+implUnzip (TyListT (TyPairT a1 b1) :-> TyPairT (TyListT a2) (TyListT b2)) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy b1 b2
+  pure (k1 unzip)
+implUnzip _ = Nothing
+
 -- match: store the capture groups of the first match in State, return group 0.
 implMatch :: forall t. Ty t -> Maybe t
 implMatch ty = do
@@ -436,5 +533,5 @@ gsub rx repl txt = unsafePerformIO $ do
     slice from to = TU.takeWord8 (to - from) (TU.dropWord8 from txt)
 
 headOr :: a -> [a] -> a
-headOr d []      = d
+headOr def []      = def
 headOr _ (x : _) = x
