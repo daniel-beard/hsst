@@ -38,6 +38,7 @@ data UType
   | TyBool
   | TyRegex
   | TyList UType
+  | TyPair UType UType
   | TyArr UType UType
   deriving (Eq, Show)
 
@@ -143,6 +144,7 @@ prettyUTypeWith varName = go (0 :: Int)
     go _ TyRegex         = "Regex"
     go _ TyStr           = "String"
     go _ (TyList t)      = "[" <> go 0 t <> "]"
+    go _ (TyPair x y)    = "(" <> go 0 x <> ", " <> go 0 y <> ")"
     go p (TyArr a b) =
       let s = go 1 a <> " -> " <> go 0 b
        in if p > 0 then "(" <> s <> ")" else s

@@ -158,8 +158,19 @@ atom = choice
   , uncurry UBool  <$> boolLitSpan
   , uncurry dollarRef <$> dollarRefSpan
   , uncurry UVar   <$> identifierSpan
-  , parens expr
+  , parenOrPair
   ]
+
+-- `(expr)` is grouping, `(a, b)` pair literals.
+-- A pair desugars to the internal `(,)` prim.
+-- These aren't full tuples, only pairs, although it's possible to nest them: `(a, (b, c))`.
+parenOrPair :: Parser UTerm
+parenOrPair = do
+  (sp, es) <- spanned (between (symbol "(") (char ')') (sepBy1 expr (symbol ",")))
+  case es of
+    [e]      -> pure e
+    [e1, e2] -> pure (UApp (UApp (UVar sp "(,)") e1) e2)
+    _        -> fail "tuples are pairs only; nest them instead: (a, (b, c))"
 
 dollarRef :: Span -> Int -> UTerm
 dollarRef sp ix = UApp (UVar sp "group") (UInt sp ix)
@@ -176,11 +187,29 @@ boolLitSpan :: Parser (Span, Bool)
 boolLitSpan = spanned $
   ((True <$ string "true") <|> (False <$ string "false")) <* notFollowedBy alphaNumChar
 
+-- Lambda binder. Can be one of:
+-- - Name
+-- - Pair pattern, e.g. `(x, y)`. Recursive, so we can support multidepth destructuring.
+data Binder = BVar Name | BPair Span Binder Binder
+
+binder :: Parser Binder
+binder = (BVar <$> identifier) <|> pairPattern
+  where
+    pairPattern = do
+      (sp, (p, q)) <- spanned $
+        between (symbol "(") (char ')') ((,) <$> binder <* symbol "," <*> binder)
+      pure (BPair sp p q)
+
+-- `\(x, y) -> e` desugars to `\(,)(\x -> \y -> e)`
+bindLam :: Binder -> UTerm -> UTerm
+bindLam (BVar x)       e = ULam x e
+bindLam (BPair sp p q) e = UApp (UVar sp "\\(,)") (bindLam p (bindLam q e))
+
 lambda :: Parser UTerm
 lambda = do
-  xs <- symbol "\\" *> some identifier <* symbol "->"
+  bs <- symbol "\\" *> some binder <* symbol "->"
   e  <- expr
-  pure (foldr ULam e xs)
+  pure (foldr bindLam e bs)
 
 letBinding :: Parser UTerm
 letBinding = do

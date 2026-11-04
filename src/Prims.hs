@@ -33,10 +33,15 @@ import System.IO.Unsafe (unsafePerformIO)
 -- Type-variable identifiers used inside primitive schemes. They live in
 -- the same TVar namespace as inference; we just pick small numbers and
 -- let `instantiate` rename them on every use.
-a, b, c :: TVar
+a, b, c, d :: TVar
 a = 0
 b = 1
 c = 2
+d = 3
+
+-- (a, b) of two scheme variables.
+tyPair :: TVar -> TVar -> UType
+tyPair x y = TyPair (TyVar x) (TyVar y)
 
 -- One row per primitive: name, type scheme (used by inference), and a
 -- dispatcher that returns the implementation iff the requested monomorphic type matches.
@@ -97,7 +102,24 @@ prims =
     Prim
       "tee"
       (Scheme [a] $ TyVar a ::-> TyVar a) implTee,
-    -- String <-> [String]. A String is [Char]. The polymorphic list ops below also apply.
+    Prim "id" (Scheme [a] $ TyVar a ::-> TyVar a) implId,
+    -- Swap a function's first two arguments, useful for partial application.
+    Prim "flip"
+      (Scheme [a, b, c] $ (TyVar a ::-> TyVar b ::-> TyVar c) ::-> TyVar b ::-> TyVar a ::-> TyVar c)
+      implFlip,
+    -- Pairs
+    -- Desugared from an `(x, y)` literal, not a valid identifier so we don't have to worry about shadowing.
+    Prim "(,)"  pairScheme implPair,
+    Prim "pair" pairScheme implPair,
+    -- Desugared from a lambda binding `\(x, y) ->`, not a valid identifier so we don't have to worry about shadowing.
+    Prim "\\(,)"   uncurryScheme implUncurry,
+    Prim "uncurry" uncurryScheme implUncurry,
+    Prim "curry"
+      (Scheme [a, b, c] $ (tyPair a b ::-> TyVar c) ::-> TyVar a ::-> TyVar b ::-> TyVar c)
+      implCurry,
+    Prim "fst"  (Scheme [a, b] $ tyPair a b ::-> TyVar a) implFst,
+    Prim "snd"  (Scheme [a, b] $ tyPair a b ::-> TyVar b) implSnd,
+    Prim "swap" (Scheme [a, b] $ tyPair a b ::-> tyPair b a) implSwap,
     monoPrim "words"      (TyStrT :-> TyListT TyStrT) (k1 T.words),
     monoPrim "unwords"    (TyListT TyStrT :-> TyStrT) (k1 T.unwords),
     monoPrim "lines"      (TyStrT :-> TyListT TyStrT) (k1 T.lines),
@@ -282,6 +304,69 @@ implTee (a1 :-> a2) = do
   pure (\x -> do tell [render a1 x]; pure x)
 implTee _ = Nothing
 
+implId :: forall t. Ty t -> Maybe t
+implId (a1 :-> a2) = do
+  Refl <- cmpTy a1 a2
+  pure (k1 id)
+implId _ = Nothing
+
+implFlip :: forall t. Ty t -> Maybe t
+implFlip ((a1 :-> b1 :-> c1) :-> b2 :-> a2 :-> c2) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy b1 b2
+  Refl <- cmpTy c1 c2
+  pure (\f -> pure (\y -> pure (\x -> f x >>= ($ y))))
+implFlip _ = Nothing
+
+-- a -> b -> (a, b)
+pairScheme :: Scheme
+pairScheme = Scheme [a, b] $ TyVar a ::-> TyVar b ::-> tyPair a b
+
+-- (a -> b -> c) -> (a, b) -> c
+uncurryScheme :: Scheme
+uncurryScheme = Scheme [a, b, c] $ (TyVar a ::-> TyVar b ::-> TyVar c) ::-> tyPair a b ::-> TyVar c
+
+implPair :: forall t. Ty t -> Maybe t
+implPair (a1 :-> b1 :-> TyPairT a2 b2) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy b1 b2
+  pure (k2 (,))
+implPair _ = Nothing
+
+implUncurry :: forall t. Ty t -> Maybe t
+implUncurry ((a1 :-> b1 :-> c1) :-> TyPairT a2 b2 :-> c2) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy b1 b2
+  Refl <- cmpTy c1 c2
+  pure $ k1 (\f (x, y) -> f x >>= ($ y))
+implUncurry _ = Nothing
+
+implCurry :: forall t. Ty t -> Maybe t
+implCurry ((TyPairT a1 b1 :-> c1) :-> a2 :-> b2 :-> c2) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy b1 b2
+  Refl <- cmpTy c1 c2
+  pure (\f -> pure (\x -> pure (\y -> f (x, y))))
+implCurry _ = Nothing
+
+implFst :: forall t. Ty t -> Maybe t
+implFst (TyPairT a1 _ :-> a2) = do
+  Refl <- cmpTy a1 a2
+  pure (k1 fst)
+implFst _ = Nothing
+
+implSnd :: forall t. Ty t -> Maybe t
+implSnd (TyPairT _ b1 :-> b2) = do
+  Refl <- cmpTy b1 b2
+  pure (k1 snd)
+implSnd _ = Nothing
+
+implSwap :: forall t. Ty t -> Maybe t
+implSwap (TyPairT a1 b1 :-> TyPairT b2 a2) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy b1 b2
+  pure $ k1 (\(x, y) -> (y, x))
+implSwap _ = Nothing
 -- match: store the capture groups of the first match in State, return group 0.
 implMatch :: forall t. Ty t -> Maybe t
 implMatch ty = do
