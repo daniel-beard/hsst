@@ -1,9 +1,9 @@
 module RegexSpec (spec) where
 
-import qualified Data.Text as T
 import Test.Hspec
 
 import Lib (runProgram)
+import TestUtil (shouldBeLeftContaining)
 import Parser
 import Syntax
 
@@ -64,14 +64,12 @@ spec = do
       runProgram "matches(/\\d+/)" "a12" `shouldBe` Right "true"
 
     it "reports an invalid pattern as a compile error" $
-      case runProgram "/[a/" "" of
-        Right out -> expectationFailure ("expected a compile error, got: " ++ T.unpack out)
-        Left err  -> err `shouldSatisfy` ("invalid regex:" `T.isInfixOf`)
+      runProgram "/[a/" "" `shouldBeLeftContaining` "invalid regex:"
 
-    it "points the caret inside the offending pattern" $
-      case runProgram "/[a/" "" of
-        Right out -> expectationFailure ("expected a compile error, got: " ++ T.unpack out)
-        Left err  -> err `shouldSatisfy` (\e -> "^" `T.isInfixOf` e && "1:" `T.isInfixOf` e)
+    it "points the caret inside the offending pattern" $ do
+      let result = runProgram "/[a/" ""
+      result `shouldBeLeftContaining` "^"
+      result `shouldBeLeftContaining` "1:"
 
   describe "matches" $ do
     it "is true when the pattern is found" $
@@ -172,6 +170,4 @@ spec = do
 
   describe "regex compilation offsets" $
     it "points the caret at the right character after non-ASCII text" $
-      case runProgram "/é[a/" "" of
-        Right out -> expectationFailure ("expected a compile error, got: " ++ T.unpack out)
-        Left err  -> err `shouldSatisfy` ("1:5" `T.isInfixOf`)
+      runProgram "/é[a/" "" `shouldBeLeftContaining` "1:5"

@@ -33,6 +33,10 @@ spec = do
       runProgram "flip(minus, 1, 10)" ""
         `shouldBe` Right "9"
 
+    it "flip makes partial application of zip take stdin as the first argument" $
+      runProgram "words |> flip(zip, words(\"d e f\"))" "a b c"
+        `shouldBe` Right "a\td\nb\te\nc\tf"
+
     it "compose (|>) is left-to-right" $
       runProgram "lines |> length" "a\nb\nc\n"
         `shouldBe` Right "3"

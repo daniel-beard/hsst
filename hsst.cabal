@@ -176,6 +176,8 @@ test-suite hsst-test
       ProgramSpec
       RegexSpec
       StringSpec
+      PairSpec
+      TestUtil
       Paths_hsst
   autogen-modules:
       Paths_hsst
