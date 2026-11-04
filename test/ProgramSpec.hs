@@ -29,6 +29,10 @@ spec = do
       runProgram "42" ""
         `shouldBe` Right "42"
 
+    it "flip swaps a function's first two arguments" $
+      runProgram "flip(minus, 1, 10)" ""
+        `shouldBe` Right "9"
+
     it "compose (|>) is left-to-right" $
       runProgram "lines |> length" "a\nb\nc\n"
         `shouldBe` Right "3"
