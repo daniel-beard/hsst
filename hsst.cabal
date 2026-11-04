@@ -177,6 +177,7 @@ test-suite hsst-test
       RegexSpec
       StringSpec
       PairSpec
+      QQ
       TestUtil
       Paths_hsst
   autogen-modules:
@@ -239,6 +240,7 @@ test-suite hsst-test
     , megaparsec
     , mtl
     , parser-combinators
+    , template-haskell
     , text
     , text-icu
     , vector

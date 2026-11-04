@@ -1,33 +1,34 @@
 module PairSpec (spec) where
 
 import Lib (runProgram, runProgramWithLog)
+import QQ (hsst)
 import Test.Hspec
-import TestUtil (shouldBeLeftContaining)
+import TestUtil 
 
 spec :: Spec
 spec = do
   describe "pair literals" $ do
     it "prints a pair tab-separated" $
-      runProgram "(1, \"a\")" "" `shouldBe` Right "1\ta"
+      [hsst| (1, "a") |] `outputs` "1\ta"
 
     it "parens around a single expression are still grouping" $
-      runProgram "(plus(1, 2))" "" `shouldBe` Right "3"
+      [hsst| (plus(1, 2)) |] `outputs` "3"
 
     it "f(a, b) is still curried application, f((a, b)) passes a pair" $ do
-      runProgram "plus(1, 2)" "" `shouldBe` Right "3"
-      runProgram "fst((1, 2))" "" `shouldBe` Right "1"
+      [hsst| plus(1, 2) |] `outputs` "3"
+      [hsst| fst((1, 2)) |] `outputs` "1"
 
     it "nests" $
-      runProgram "(1, (2, 3)) & snd & snd" "" `shouldBe` Right "3"
+      [hsst| (1, (2, 3)) & snd & snd |] `outputs` "3"
 
     it "rejects triples, and suggests nesting instead" $
       runProgram "(1, 2, 3)" "" `shouldBeLeftContaining` "nest them instead"
 
     it "a list of pairs prints one row per line" $
-      runProgram "zip(words(\"a b\"), words(\"x y\"))" "" `shouldBe` Right "a\tx\nb\ty"
+      [hsst| zip(words("a b"), words("x y")) |] `outputs` "a\tx\nb\ty"
 
     it "a list inside a pair stays on one row, Show-style" $
-      runProgram "(words(\"a b\"), 1)" "" `shouldBe` Right "[\"a\",\"b\"]\t1"
+      [hsst| (words("a b"), 1) |] `outputs` "[\"a\",\"b\"]\t1"
 
     it "tee renders a pair Show-style" $
       runProgramWithLog "(1, \"a\") & tee" ""
@@ -36,44 +37,44 @@ spec = do
   describe "lambda pair patterns" $ do
     it "destructures a pair" $
       runProgram "words |> map(\\w -> (w, length(w))) |> map(\\(w, n) -> n)" "hi there"
-        `shouldBe` Right "2\n5"
+        `shouldBeRight` "2\n5"
 
     it "destructures nested pairs" $
-      runProgram "(1, (2, 3)) & \\(a, (b, c)) -> plus(a, c)" "" `shouldBe` Right "4"
+      [hsst| (1, (2, 3)) & \(a, (b, c)) -> plus(a, c) |] `outputs` "4"
 
     it "mixes plain and pattern binders" $
-      runProgram "(2, 3) & (\\x (a, b) -> plus(x, b))(10)" "" `shouldBe` Right "13"
+      [hsst| (2, 3) & (\x (a, b) -> plus(x, b))(10) |] `outputs` "13"
 
   describe "pair combinators" $ do
     it "fst / snd / swap" $ do
-      runProgram "(1, 2) & fst" "" `shouldBe` Right "1"
-      runProgram "(1, 2) & snd" "" `shouldBe` Right "2"
-      runProgram "(1, \"a\") & swap" "" `shouldBe` Right "a\t1"
+      [hsst| (1, 2) & fst    |] `outputs` "1"
+      [hsst| (1, 2) & snd    |] `outputs` "2"
+      [hsst| (1, "a") & swap |] `outputs` "a\t1"
 
     it "first / second" $ do
-      runProgram "(\"ab\", 1) & first(uppercase)" "" `shouldBe` Right "AB\t1"
-      runProgram "(\"ab\", true) & second(not)" "" `shouldBe` Right "ab\tfalse"
+      [hsst| ("ab", 1) & first(uppercase) |] `outputs` "AB\t1"
+      [hsst| ("ab", true) & second(not)   |] `outputs` "ab\tfalse"
 
     it "bimap / both" $ do
-      runProgram "(\"ab\", \"xyz\") & bimap(uppercase, length)" "" `shouldBe` Right "AB\t3"
-      runProgram "(\"ab\", \"xyz\") & both(length)" "" `shouldBe` Right "2\t3"
+      [hsst| ("ab", "xyz") & bimap(uppercase, length) |] `outputs` "AB\t3"
+      [hsst| ("ab", "xyz") & both(length)             |] `outputs` "2\t3"
 
     it "fanout pairs up two views of the same input" $
       runProgram "words |> map(fanout(id, length))" "hi there"
-        `shouldBe` Right "hi\t2\nthere\t5"
+        `shouldBeRight` "hi\t2\nthere\t5"
 
     it "fanout runs left then right, so group sees match's captures" $
-      runProgram "fanout(match(/(\\w+)@/), group(1))" "bob@x.com"
-        `shouldBe` Right "bob@\tbob"
+      runProgram [hsst|fanout(match(/(\w+)@/), group(1))|] "bob@x.com"
+        `shouldBeRight` "bob@\tbob"
 
     it "uncurry / curry / pair" $ do
-      runProgram "(2, 3) & uncurry(plus)" "" `shouldBe` Right "5"
-      runProgram "curry(fst, 1, 2)" "" `shouldBe` Right "1"
-      runProgram "pair(1, 2)" "" `shouldBe` Right "1\t2"
+      [hsst| (2, 3) & uncurry(plus) |] `outputs` "5"
+      [hsst| curry(fst, 1, 2)       |] `outputs` "1"
+      [hsst| pair(1, 2)             |] `outputs` "1\t2"
 
     it "zip / unzip round-trip" $
-      runProgram "zip(words(\"a b\"), words(\"x y\")) & unzip & fst & unwords" ""
-        `shouldBe` Right "a b"
+      [hsst| zip(words("a b"), words("x y")) & unzip & fst & unwords |]
+        `outputs` "a b"
 
   describe "pair errors" $ do
     it "projecting a non-pair is a type mismatch" $
