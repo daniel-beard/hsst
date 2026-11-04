@@ -1,5 +1,6 @@
 module Help
   ( help
+  , helpTypes
   ) where
 
 import qualified Data.Map.Strict as Map
@@ -27,6 +28,9 @@ help q
     -- Only emitted by the parser for `(x, y)` literals and `\(x, y) ->` patterns.
     -- `pair` and `uncurry` are the callable versions.
     desugarOnly = ["(,)", "\\(,)"]
+
+helpTypes :: T.Text
+helpTypes = ("Available types. Use these with 'hsst -h {TypeName}':\n\n" :: T.Text) <> T.intercalate "\n" (map fst baseTypes)
 
 -- Queryable types, as a predicate on a (sub)type.
 -- `Pair` matches any pair, of any type.

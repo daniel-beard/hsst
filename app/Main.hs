@@ -8,13 +8,15 @@ import System.Exit (exitFailure)
 import System.IO (stderr, stdin, hIsTerminalDevice)
 import System.Process (readProcess)
 
-import Help (help)
+import Help 
 import Lib (runProgramWithLog)
 
 main :: IO ()
 main = do
   args <- getArgs
   case args of
+    -- Outputs available types
+    ["-t"] -> TIO.putStrLn helpTypes
     -- Signatures of a primitive, or every primitive mentioning a type.
     -- E.g. `hsst -h String` or `hsst -h map`
     ["-h", q] -> case help (T.pack q) of
