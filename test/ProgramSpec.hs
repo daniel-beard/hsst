@@ -3,6 +3,8 @@ module ProgramSpec (spec) where
 import qualified Data.Text as T
 import Lib (runProgram)
 import Test.Hspec
+import TestUtil
+import QQ (hsst)
 
 spec :: Spec
 spec = do
@@ -26,12 +28,10 @@ spec = do
         `shouldBe` Right "AB\nCD"
 
     it "literal program (no stdin function)" $
-      runProgram "42" ""
-        `shouldBe` Right "42"
+      [hsst| 42 |] `outputs` "42"
 
     it "flip swaps a function's first two arguments" $
-      runProgram "flip(minus, 1, 10)" ""
-        `shouldBe` Right "9"
+      [hsst| flip(minus, 1, 10) |] `outputs` "9"
 
     it "flip makes partial application of zip take stdin as the first argument" $
       runProgram "words |> flip(zip, words(\"d e f\"))" "a b c"
@@ -42,16 +42,13 @@ spec = do
         `shouldBe` Right "3"
 
     it "& applies a value to a function (left-to-right)" $
-      runProgram "3 & plus(2)" ""
-        `shouldBe` Right "5"
+      [hsst| 3 & plus(2) |] `outputs` "5"
 
     it "plus adds two ints" $
-      runProgram "plus(2, 3)" ""
-        `shouldBe` Right "5"
+      [hsst| plus(2, 3) |] `outputs` "5"
 
     it "minus subtracts two ints" $
-      runProgram "minus(10, 4)" ""
-        `shouldBe` Right "6"
+      [hsst| minus(10, 4) |] `outputs` "6"
 
   describe "ad-hoc polymorphism" $ do
     it "String overload is grapheme-aware" $

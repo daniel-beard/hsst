@@ -3,6 +3,8 @@ module StringSpec (spec) where
 import qualified Data.Text as T
 import Lib (runProgram)
 import Test.Hspec
+import TestUtil 
+import QQ (hsst)
 
 spec :: Spec
 spec = describe "strings & chars" $ do
@@ -49,17 +51,13 @@ spec = describe "strings & chars" $ do
 
   describe "chars" $ do
     it "char literals have type Char and render quoted" $
-      runProgram "uppercase('a')" ""
-        `shouldBe` Right "A"
+      [hsst| uppercase('a') |] `outputs` "A"
 
     it "& feeds a char value into a function" $
-      runProgram "'a' & uppercase" ""
-        `shouldBe` Right "A"
+      [hsst| 'a' & uppercase |] `outputs` "A"
 
     it "charName outputs the correct name for ascii" $
-      runProgram "charName('a')" ""
-        `shouldBe` Right "LATIN SMALL LETTER A"
+      [hsst| charName('a') |] `outputs` "LATIN SMALL LETTER A"
 
     it "codePoint outputs values in U+{hex} format" $
-      runProgram "codePoint('a')" ""
-        `shouldBe` Right "U+0061"
+      [hsst| codePoint('a') |] `outputs` "U+0061"
