@@ -3,6 +3,7 @@ module Lib
   , runProgramWithLog
   ) where
 
+import Control.Applicative ((<|>))
 import Data.Bifunctor (first)
 import qualified Data.Text as T
 
@@ -55,6 +56,7 @@ unprintable ty = case ty of
   TyArrT _ _ -> Just "is it missing an argument?"
   TyRegexT   -> Just "use it with matches or match"
   TyListT a  -> unprintable a
+  TyPairT x y -> unprintable x <|> unprintable y
   _          -> Nothing
 
 -- Run program against stdin string.

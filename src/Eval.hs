@@ -51,6 +51,7 @@ render ty x = case ty of
   TyRegexT         -> "<regex>"
   TyListT TyCharT  -> T.show x
   TyListT a        -> "[" <> T.intercalate "," (map (render a) x) <> "]"
+  TyPairT a b      -> let (l, r) = x in "(" <> render a l <> "," <> render b r <> ")"
   TyArrT _ _       -> "<function : " <> showTy ty <> ">"
 
 renderOutput :: Ty t -> t -> T.Text
@@ -61,6 +62,16 @@ renderOutput ty x = case ty of
   TyBoolT          -> if x then "true" else "false"
   TyListT TyCharT  -> T.show x
   TyListT a        -> T.intercalate "\n" (map (renderOutput a) x)
+  -- Pairs are rendered as {first}\t{second} - for cut/awk/whatever
+  TyPairT a b      -> let (l, r) = x in cell a l <> "\t" <> cell b r
   -- Unreachable: `Lib.checkRunnable` rejects unprintable output types before evaluation.
   TyRegexT         -> "<regex>"
   TyArrT _ _       -> "<function : " <> showTy ty <> ">"
+
+-- A column or 'cell' of a rendered pair - lists are typed style so the overall Pair's row remains on one line:
+-- E.g. ["a", "b", "c"]\t3
+cell :: Ty t -> t -> T.Text
+cell ty x = case ty of
+  TyListT TyCharT -> renderOutput ty x
+  TyListT _       -> render ty x
+  _               -> renderOutput ty x

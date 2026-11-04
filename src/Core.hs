@@ -30,6 +30,8 @@ data Ty t where
   TyRegexT :: Ty Regex
   -- [a]
   TyListT  :: Ty a -> Ty [a]
+  -- (a, b)
+  TyPairT  :: Ty a -> Ty b -> Ty (a, b)
   -- Applying an arrow may run interpreter effects, so the runtime value is a Kleisli arrow: `a -> Interp b`
   TyArrT   :: Ty a -> Ty b -> Ty (a -> Interp b)
 
@@ -78,6 +80,10 @@ cmpTy TyRegexT TyRegexT  = Just Refl
 cmpTy (TyListT a) (TyListT b) = do
   Refl <- cmpTy a b
   pure Refl
+cmpTy (TyPairT a1 b1) (TyPairT a2 b2) = do
+  Refl <- cmpTy a1 a2
+  Refl <- cmpTy b1 b2
+  pure Refl
 cmpTy (a1 :-> b1) (a2 :-> b2) = do
   Refl <- cmpTy a1 a2
   Refl <- cmpTy b1 b2
@@ -96,6 +102,10 @@ reifyTy ut = case ut of
   TyList a  -> do
     ExType a' <- reifyTy a
     Right (ExType (TyListT a'))
+  TyPair a b -> do
+    ExType a' <- reifyTy a
+    ExType b' <- reifyTy b
+    Right (ExType (TyPairT a' b'))
   TyArr a b -> do
     ExType a' <- reifyTy a
     ExType b' <- reifyTy b
@@ -119,6 +129,7 @@ tyToUType t = case t of
   TyBoolT    -> TyBool
   TyRegexT   -> TyRegex
   TyListT a  -> TyList (tyToUType a)
+  TyPairT a b -> TyPair (tyToUType a) (tyToUType b)
   TyArrT a b -> TyArr (tyToUType a) (tyToUType b)
 
 -- Render a GADT type by projecting to UType and reusing the single UType pretty-printer.

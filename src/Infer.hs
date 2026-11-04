@@ -38,6 +38,7 @@ applyTy s t = case t of
   TyVar n   -> Map.findWithDefault t n s
   TyArr a b -> TyArr (applyTy s a) (applyTy s b)
   TyList a  -> TyList (applyTy s a)
+  TyPair a b -> TyPair (applyTy s a) (applyTy s b)
   _         -> t
 
 applyAnn :: Subst -> AnnTerm -> AnnTerm
@@ -63,6 +64,7 @@ ftvTy t = case t of
   TyVar n   -> Set.singleton n
   TyArr a b -> ftvTy a `Set.union` ftvTy b
   TyList a  -> ftvTy a
+  TyPair a b -> ftvTy a `Set.union` ftvTy b
   _         -> Set.empty
 
 -- Deferred overloads.
@@ -108,6 +110,10 @@ unify sp a b = case (a, b) of
   (TyBool,   TyBool)   -> pure emptySubst
   (TyRegex,  TyRegex)  -> pure emptySubst
   (TyList x, TyList y) -> unify sp x y
+  (TyPair x1 y1, TyPair x2 y2) -> do
+    s1 <- unify sp x1 x2
+    s2 <- unify sp (applyTy s1 y1) (applyTy s1 y2)
+    pure (s2 `composeS` s1)
   (TyArr l1 r1, TyArr l2 r2) -> do
     s1 <- unify sp l1 l2
     s2 <- unify sp (applyTy s1 r1) (applyTy s1 r2)
