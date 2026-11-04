@@ -110,3 +110,4 @@ tests:
     dependencies:
     - hsst
     - hspec
+    - template-haskell
