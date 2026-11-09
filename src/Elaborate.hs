@@ -104,6 +104,7 @@ elaborate env e = case e of
       _ -> internal sp $
         "application of non-function type " <> showTy tF
 
+-- Elaborate a closed hsst program
 elaborateClosed :: AnnTerm -> Either Diagnostic (Typed (Term ()))
 elaborateClosed = elaborate TyNil
 

@@ -25,7 +25,20 @@ spec = describe "help" $ do
       Right out -> T.lines out `shouldContain` ["map :: (Char -> Char) -> String -> String"]
 
   it "prints pair types" $
-    help "fst" `shouldBe` Right "fst :: (a, b) -> a"
+    (take 1 . T.lines <$> help "zip") `shouldBe` Right ["zip :: [a] -> [b] -> [(a, b)]"]
+
+  it "prints a documented primitive's signature, description and examples" $
+    help "swap" `shouldBe` Right
+      "swap :: (a, b) -> (b, a)\n\n\
+      \Swaps the order of the two values in a pair\n\n\
+      \>>> swap((\"1\", 2))\n(2, \"1\")"
+
+  it "a type query lists only signatures, even for documented primitives" $
+    case help "Pair" of
+      Left err  -> expectationFailure (T.unpack err)
+      Right out -> do
+        T.lines out `shouldContain` ["swap :: (a, b) -> (b, a)"]
+        T.lines out `shouldSatisfy` all (" :: " `T.isInfixOf`)
 
   it "Pair lists every primitive mentioning a pair, without the parser-only names" $
     case help "Pair" of

@@ -38,7 +38,7 @@ eval env e = case e of
     f' a'
   TPrim _ _ x   -> pure x
 
--- Show-style rendering: strings quoted, lists as ["a","b",...], plain
+-- Show-style rendering: strings quoted, lists as ["a", "b", ...], plain
 -- otherwise. Function values (the result of a partial pipeline that wasn't
 -- applied to anything) get a placeholder.
 render :: Ty t -> t -> T.Text
@@ -50,8 +50,8 @@ render ty x = case ty of
   --TODO: Better render representation?
   TyRegexT         -> "<regex>"
   TyListT TyCharT  -> T.show x
-  TyListT a        -> "[" <> T.intercalate "," (map (render a) x) <> "]"
-  TyPairT a b      -> let (l, r) = x in "(" <> render a l <> "," <> render b r <> ")"
+  TyListT a        -> "[" <> T.intercalate ", " (map (render a) x) <> "]"
+  TyPairT a b      -> let (l, r) = x in "(" <> render a l <> ", " <> render b r <> ")"
   TyArrT _ _       -> "<function : " <> showTy ty <> ">"
 
 renderOutput :: Ty t -> t -> T.Text

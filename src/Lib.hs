@@ -1,6 +1,7 @@
 module Lib
   ( runProgram
   , runProgramWithLog
+  , evalRendered
   ) where
 
 import Control.Applicative ((<|>))
@@ -15,19 +16,30 @@ import Infer    (inferProgram)
 import Interp   (Interp, InterpR(..), InterpW, runInterp)
 import Elaborate (elaborateClosed)
 import Core
-import Eval     (Env(..), eval, renderOutput)
+import Eval     (Env(..), eval, render, renderOutput)
 import qualified Prims
 
 
 -- parse, resolve, infer, elaborate. Convert to our GADT.
+-- Checks that the result is runnable - see `checkRunnable`
 prepare :: T.Text -> Either T.Text (Typed (Term ()))
 prepare src = do
-  uterm  <- first T.pack (parseProgram (T.unpack src))
-  ixterm <- first (renderDiagnostic src) (resolve Prims.primNames uterm)
-  ann    <- first (renderDiagnostic src) (inferProgram Prims.primSchemes ixterm)
-  typed  <- first (renderDiagnostic src) (elaborateClosed ann)
-  first (renderDiagnostic src) (checkRunnable (annSpan ann) typed)
+  (sp, typed) <- elaborate src
+  first (renderDiagnostic src) (checkRunnable sp typed)
   pure typed
+
+-- `prepare` without the runnable check. Also returns the whole program's span.
+elaborate :: T.Text -> Either T.Text (Span, Typed (Term ()))
+elaborate src = do
+  -- Parse
+  uterm  <- first T.pack (parseProgram (T.unpack src))
+  -- Resolve
+  ixterm <- first (renderDiagnostic src) (resolve Prims.primNames uterm)
+  -- Infer
+  ann    <- first (renderDiagnostic src) (inferProgram Prims.primSchemes ixterm)
+  -- Elaborate
+  typed  <- first (renderDiagnostic src) (elaborateClosed ann)
+  pure (annSpan ann, typed)
 
 -- A program must be a value or a stdin filter, and its output must be printable.
 -- Rejects e.g. `take` (missing an argument) or `/foo/` (a bare regex).
@@ -58,6 +70,14 @@ unprintable ty = case ty of
   TyListT a  -> unprintable a
   TyPairT x y -> unprintable x <|> unprintable y
   _          -> Nothing
+
+-- Evaluate a closed program (no stdin) and render its result Show-style, as `tee` does.
+-- Used to check the examples in primitive docs.
+-- A function result renders as a placeholder rather than being fed stdin.
+evalRendered :: T.Text -> Either T.Text T.Text
+evalRendered src = do
+  (_, Typed ty term) <- elaborate src
+  Right (fst (runInterp (InterpR "") (render ty <$> eval ENil term)))
 
 -- Run program against stdin string.
 -- Returns an error message, or the program output.

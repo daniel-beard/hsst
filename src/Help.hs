@@ -5,29 +5,45 @@ module Help
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isNothing)
 
 import Infer (Scheme(..))
-import Prims (primSchemes)
+import PrimDoc (PrimDoc(..), Example(..))
+import Prims (primSchemes, primHelpEntries)
 import Syntax
 
--- `hsst -h <query>`:
--- - primitive query: all overloads listed
--- - type name query: every primitive signature containing the type
+-- `hsst -h <query>`: a primitive name or a type name.
 help :: T.Text -> Either T.Text T.Text
 help q
-  | Just scs <- Map.lookup (T.unpack q) primSchemes =
-      Right (signatures [ (T.unpack q, sc) | sc <- scs ])
-  | Just isTy <- lookup q baseTypes =
-      Right (signatures [ (n, sc) | (n, scs) <- Map.toList primSchemes
-                                  , n `notElem` desugarOnly
-                                  , sc@(Scheme _ t) <- scs
-                                  , isTy `mentionedIn` t ])
-  | otherwise = Left ("no primitive or type named " <> q)
+  | Just entries <- Map.lookup name primHelpEntries = Right (primitiveHelp name entries)
+  | Just isTy    <- lookup q baseTypes              = Right (typeHelp isTy)
+  | otherwise                                       = Left ("no primitive or type named " <> q)
   where
-    -- Only emitted by the parser for `(x, y)` literals and `\(x, y) ->` patterns.
-    -- `pair` and `uncurry` are the callable versions.
-    desugarOnly = ["(,)", "\\(,)"]
+    name = T.unpack q
+
+-- Each overload's signature, description and examples.
+-- If no overload has docs yet, just the signatures, one per line.
+primitiveHelp :: Name -> [(Scheme, Maybe PrimDoc)] -> T.Text
+primitiveHelp n entries
+  | all (isNothing . snd) entries = signatures (map withName entries)
+  | otherwise                     = T.intercalate "\n\n" (map (primHelp n) entries)
+  where
+    withName (sc, _) = (n, sc)
+
+-- Every primitive signature that mentions the type.
+typeHelp :: (UType -> Bool) -> T.Text
+typeHelp isTy = signatures
+  [ (n, sc)
+  | (n, scs)        <- Map.toList primSchemes
+  , n `notElem` desugarOnly
+  , sc@(Scheme _ t) <- scs
+  , isTy `mentionedIn` t
+  ]
+
+-- Only emitted by the parser for `(x, y)` literals and `\(x, y) ->` patterns.
+-- `pair` and `uncurry` are the callable versions.
+desugarOnly :: [Name]
+desugarOnly = ["(,)", "\\(,)"]
 
 helpTypes :: T.Text
 helpTypes = ("Available types. Use these with 'hsst -h {TypeName}':\n\n" :: T.Text) <> T.intercalate "\n" (map fst baseTypes)
@@ -49,8 +65,33 @@ mentionedIn isTy t = isTy t || case t of
   TyArr a b  -> isTy `mentionedIn` a || isTy `mentionedIn` b
   _          -> False
 
+-- One overload, as blank-line separated blocks:
+--
+-- > swap :: (a, b) -> (b, a)
+-- >
+-- > Swaps the order of the two values in a pair
+-- >
+-- > >>> swap(("1", 2)) 
+-- > (2, "1")
+--
+-- An undocumented overload is just its signature.
+primHelp :: Name -> (Scheme, Maybe PrimDoc) -> T.Text
+primHelp n (sc, md) = T.intercalate "\n\n" (signature (n, sc) : maybe [] docBlocks md)
+
+-- The description, then all examples together as one block.
+docBlocks :: PrimDoc -> [T.Text]
+docBlocks d = case docExamples d of
+  []  -> [docSummary d]
+  exs -> [docSummary d, T.intercalate "\n" (map example exs)]
+
+example :: Example -> T.Text
+example e = ">>> " <> exSource e <> "\n" <> exResult e
+
 signatures :: [(Name, Scheme)] -> T.Text
-signatures = T.intercalate "\n" . map (\(n, sc) -> T.pack n <> " :: " <> prettyScheme sc)
+signatures = T.intercalate "\n" . map signature
+
+signature :: (Name, Scheme) -> T.Text
+signature (n, sc) = T.pack n <> " :: " <> prettyScheme sc
 
 -- Quantified vars renamed a, b, c… in order.
 prettyScheme :: Scheme -> T.Text

@@ -34,7 +34,9 @@ library
       Interp
       Lib
       Parser
+      PrimDoc
       Prims
+      QQ
       RegexCompile
       Resolve
       Syntax
@@ -96,6 +98,7 @@ library
     , megaparsec
     , mtl
     , parser-combinators
+    , template-haskell
     , text
     , text-icu
     , vector
@@ -163,6 +166,7 @@ executable hsst
     , mtl
     , parser-combinators
     , process
+    , template-haskell
     , text
     , text-icu
     , vector
@@ -173,11 +177,11 @@ test-suite hsst-test
   main-is: Spec.hs
   other-modules:
       HelpSpec
+      PairSpec
+      PrimDocSpec
       ProgramSpec
       RegexSpec
       StringSpec
-      PairSpec
-      QQ
       TestUtil
       Paths_hsst
   autogen-modules:
