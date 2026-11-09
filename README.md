@@ -46,8 +46,8 @@ match :: Regex -> String -> String
 matches :: Regex -> String -> Bool
 ```
 
-Primitives are documented `doc` quasi quoter.
-Examples are compile time checked, and the test suite runs every example against its expected output.
+Primitives are documented with the `doc` quasi quoter.
+Examples are parsed at compile time, and the test suite checks every example against expected output.
 
 ```haskell
 prim "swap" (Scheme [a, b] $ tyPair a b ::-> tyPair b a) implSwap
