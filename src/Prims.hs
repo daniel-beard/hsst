@@ -1,6 +1,7 @@
 module Prims
   ( primSchemes,
     primNames,
+    primHelpEntries,
     lookupImpl,
   )
 where
@@ -26,6 +27,8 @@ import Data.Type.Equality ((:~:) (Refl))
 import Eval (render)
 import Infer (Scheme (..))
 import Interp (Interp, InterpS(..))
+import PrimDoc (PrimDoc)
+import QQ (doc)
 import Syntax
 import Text.Printf
 import System.IO.Unsafe (unsafePerformIO)
@@ -43,14 +46,30 @@ d = 3
 tyPair :: TVar -> TVar -> UType
 tyPair x y = TyPair (TyVar x) (TyVar y)
 
--- One row per primitive: name, type scheme (used by inference), and a
--- dispatcher that returns the implementation iff the requested monomorphic type matches.
+-- One row per primitive
 -- Arrows are Kleisli arrow - see `Interp`
 data Prim = Prim
   { primName_ :: Name,
+    -- ^ Name
     primScheme_ :: Scheme,
-    primImpl_ :: forall t. Ty t -> Maybe t
+    -- ^ Type scheme (used by inference)
+    primImpl_ :: forall t. Ty t -> Maybe t,
+    -- ^ Returns implementation iff the requested monomorphic type matches.
+    primDoc_ :: Maybe PrimDoc
+    -- ^ Help documentation (for `hsst -h`)
   }
+
+-- An undocumented primitive. Add docs with `documented`.
+prim :: Name -> Scheme -> (forall t. Ty t -> Maybe t) -> Prim
+prim name sc impl = Prim name sc impl Nothing
+
+-- Attach help text, written with the `doc` quasi quoter:
+--
+-- > prim "swap" ... implSwap
+-- >   `documented` [doc| ... |],
+documented :: Prim -> PrimDoc -> Prim
+documented p pd = p { primDoc_ = Just pd }
+infixl 0 `documented`
 
 -- Monomorphic-prim helper: dispatcher that succeeds only when the
 -- requested type matches the impl's known type.
@@ -64,7 +83,7 @@ mono expected impl reqTy = case cmpTy expected reqTy of
 -- and the dispatcher is `mono` against the same type, so the type is written exactly once.
 monoPrim :: forall s. Name -> Ty s -> s -> Prim
 monoPrim name ty impl =
-  Prim name (monoScheme ty) (mono ty impl)
+  prim name (monoScheme ty) (mono ty impl)
 
 -- Inference scheme for a monomorphic type. No qualitifed variables here.
 monoScheme :: Ty s -> Scheme
@@ -94,55 +113,133 @@ composeScheme =
 prims :: [Prim]
 prims =
   -- Pipeline plumbing
-  [ Prim "compose" composeScheme implCompose,
+  [ prim "compose" composeScheme implCompose,
     -- `|>` is the same function as compose; separate for inference diagnostics.
     -- Not a valid identifier, can only ever be emitted by the parser desugaring `|>`.
-    Prim "|>" composeScheme implCompose,
+    prim "|>" composeScheme implCompose,
     -- tee: render the current value (Show-style, to the Writer) and pass it through.
-    Prim
+    prim
       "tee"
       (Scheme [a] $ TyVar a ::-> TyVar a) implTee,
-    Prim "id" (Scheme [a] $ TyVar a ::-> TyVar a) implId,
+    prim "id" (Scheme [a] $ TyVar a ::-> TyVar a) implId,
     -- Swap a function's first two arguments, useful for partial application.
-    Prim "flip"
+    prim "flip"
       (Scheme [a, b, c] $ (TyVar a ::-> TyVar b ::-> TyVar c) ::-> TyVar b ::-> TyVar a ::-> TyVar c)
       implFlip,
     -- Pairs
     -- Desugared from an `(x, y)` literal, not a valid identifier so we don't have to worry about shadowing.
-    Prim "(,)"  pairScheme implPair,
-    Prim "pair" pairScheme implPair,
+    prim "(,)"  pairScheme implPair,
+    prim "pair" pairScheme implPair
+      `documented` [doc|
+        Makes a pair from two values. The callable form of a `(x, y)` literal
+
+        >>> pair(1, "a")
+        (1, "a")
+      |],
     -- Desugared from a lambda binding `\(x, y) ->`, not a valid identifier so we don't have to worry about shadowing.
-    Prim "\\(,)"   uncurryScheme implUncurry,
-    Prim "uncurry" uncurryScheme implUncurry,
-    Prim "curry"
+    prim "\\(,)"   uncurryScheme implUncurry,
+    prim "uncurry" uncurryScheme implUncurry
+      `documented` [doc|
+        Turns a function of two arguments into a function on a pair
+
+        >>> uncurry(plus, (2, 3))
+        5
+      |],
+    prim "curry"
       (Scheme [a, b, c] $ (tyPair a b ::-> TyVar c) ::-> TyVar a ::-> TyVar b ::-> TyVar c)
-      implCurry,
-    Prim "fst"  (Scheme [a, b] $ tyPair a b ::-> TyVar a) implFst,
-    Prim "snd"  (Scheme [a, b] $ tyPair a b ::-> TyVar b) implSnd,
-    Prim "swap" (Scheme [a, b] $ tyPair a b ::-> tyPair b a) implSwap,
-    Prim "first"
+      implCurry
+      `documented` [doc|
+        Turns a function on a pair into a function of two arguments
+
+        >>> curry(fst, 1, 2)
+        1
+      |],
+    prim "fst"  (Scheme [a, b] $ tyPair a b ::-> TyVar a) implFst
+      `documented` [doc|
+        The first value of a pair
+
+        >>> fst((1, "a"))
+        1
+      |],
+    prim "snd"  (Scheme [a, b] $ tyPair a b ::-> TyVar b) implSnd
+      `documented` [doc|
+        The second value of a pair
+
+        >>> snd((1, "a"))
+        "a"
+      |],
+    prim "swap" (Scheme [a, b] $ tyPair a b ::-> tyPair b a) implSwap
+      `documented` [doc|
+        Swaps the order of the two values in a pair
+
+        >>> swap(("1", 2))
+        (2, "1")
+      |],
+    prim "first"
       (Scheme [a, b, c] $ (TyVar a ::-> TyVar c) ::-> tyPair a b ::-> tyPair c b)
-      implFirst,
-    Prim "second"
+      implFirst
+      `documented` [doc|
+        Applies a function to the first value of a pair
+
+        >>> ("ab", 1) & first(uppercase)
+        ("AB", 1)
+      |],
+    prim "second"
       (Scheme [a, b, c] $ (TyVar b ::-> TyVar c) ::-> tyPair a b ::-> tyPair a c)
-      implSecond,
-    Prim "bimap"
+      implSecond
+      `documented` [doc|
+        Applies a function to the second value of a pair
+
+        >>> ("ab", true) & second(not)
+        ("ab", false)
+      |],
+    prim "bimap"
       (Scheme [a, b, c, d] $
           (TyVar a ::-> TyVar c) ::-> (TyVar b ::-> TyVar d) ::-> tyPair a b ::-> tyPair c d)
-      implBimap,
-    Prim "both"
+      implBimap
+      `documented` [doc|
+        Applies one function to the first value of a pair, and another to the second
+
+        >>> ("ab", "xyz") & bimap(uppercase, length)
+        ("AB", 3)
+      |],
+    prim "both"
       (Scheme [a, b] $ (TyVar a ::-> TyVar b) ::-> tyPair a a ::-> tyPair b b)
-      implBoth,
-    -- Run both functions on the same input, left then right.
-    Prim "fanout"
+      implBoth
+      `documented` [doc|
+        Applies the same function to both values of a pair
+
+        >>> ("ab", "xyz") & both(length)
+        (2, 3)
+      |],
+    prim "fanout"
       (Scheme [a, b, c] $ (TyVar a ::-> TyVar b) ::-> (TyVar a ::-> TyVar c) ::-> TyVar a ::-> tyPair b c)
-      implFanout,
-    Prim "zip"
+      implFanout
+      `documented` [doc|
+        Runs two functions on the same input and pairs up the results.
+        The left function runs first, so `fanout(match(/(\w+)@/), group(1))` sees match's captures
+
+        >>> "ab" & fanout(uppercase, length)
+        ("AB", 2)
+      |],
+    prim "zip"
       (Scheme [a, b] $ TyList (TyVar a) ::-> TyList (TyVar b) ::-> TyList (tyPair a b))
-      implZip,
-    Prim "unzip"
+      implZip
+      `documented` [doc|
+        Pairs up two lists element by element, stopping at the end of the shorter one
+
+        >>> zip(words("a b c"), words("x y"))
+        [("a", "x"), ("b", "y")]
+      |],
+    prim "unzip"
       (Scheme [a, b] $ TyList (tyPair a b) ::-> TyPair (TyList (TyVar a)) (TyList (TyVar b)))
-      implUnzip,
+      implUnzip
+      `documented` [doc|
+        Splits a list of pairs into a pair of lists
+
+        >>> unzip(zip(words("a b"), words("x y")))
+        (["a", "b"], ["x", "y"])
+      |],
     -- String
     monoPrim "words"      (TyStrT :-> TyListT TyStrT) (k1 T.words),
     monoPrim "unwords"    (TyListT TyStrT :-> TyStrT) (k1 T.unwords),
@@ -168,23 +265,23 @@ prims =
     monoPrim "gsub" (TyRegexT :-> TyStrT :-> TyStrT :-> TyStrT) (k3 gsub),
     -- match - runs the regex, records capture groups in interpreter State. 
     -- returns whole match or "" if no match
-    Prim "match" (monoScheme matchTy) implMatch,
+    prim "match" (monoScheme matchTy) implMatch,
     -- group: retrieves a previous capture group recorded by the most recent `match`
-    Prim "group" (monoScheme groupTy) implGroup,
+    prim "group" (monoScheme groupTy) implGroup,
     monoPrim "take" (TyIntT :-> TyStrT :-> TyStrT) (k2 T.take),
-    Prim
+    prim
       "take"
       -- Int -> [a] -> [a]
       (Scheme [a] $ TyInt ::-> (TyList (TyVar a) ::-> TyList (TyVar a)))
       implTake,
     monoPrim "drop" (TyIntT :-> TyStrT :-> TyStrT) (k2 T.drop),
-    Prim
+    prim
       "drop"
       -- Int -> [a] -> [a]
       (Scheme [a] $ TyInt ::-> (TyList (TyVar a) ::-> TyList (TyVar a)))
       implDrop,
     monoPrim "length" (TyStrT :-> TyIntT) (k1 T.length),
-    Prim
+    prim
       "length"
       -- [a] -> Int
       (Scheme [a] $ TyList (TyVar a) ::-> TyInt)
@@ -192,7 +289,7 @@ prims =
     -- Grapheme cluster aware reverse specialized for String
     monoPrim "reverse" (TyStrT :-> TyStrT) (k1 graphemeReverse),
     -- `[a] -> [a]` element-wise reverse
-    Prim
+    prim
       "reverse"
       (Scheme [a] $ TyList (TyVar a) ::-> TyList (TyVar a))
       implReverse,
@@ -200,7 +297,7 @@ prims =
     monoPrim "map"
       ((TyCharT :-> TyCharT) :-> TyStrT :-> TyStrT)
       (onStr mapM),
-    Prim
+    prim
       "map"
       -- (a -> b) -> [a] -> [b]
       (Scheme [a, b] $
@@ -210,7 +307,7 @@ prims =
     monoPrim "filter"
       ((TyCharT :-> TyBoolT) :-> TyStrT :-> TyStrT)
       (onStr filterM),
-    Prim
+    prim
       "filter"
       -- (a -> b) -> [a] -> [a]
       (Scheme [a] $
@@ -233,6 +330,11 @@ primSchemes = Map.fromListWith (flip (++)) [(primName_ p, [primScheme_ p]) | p <
 
 primNames :: Set Name
 primNames = Set.fromList (map primName_ prims)
+
+-- Each overload's scheme and docs, in declaration order. Used by `hsst -h`.
+primHelpEntries :: Map Name [(Scheme, Maybe PrimDoc)]
+primHelpEntries =
+  Map.fromListWith (flip (<>)) [(primName_ p, [(primScheme_ p, primDoc_ p)]) | p <- prims]
 
 -- Find an implementation for the given name that matches the requested runtime type.
 -- Fallthrough to next when no match.

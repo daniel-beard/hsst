@@ -28,11 +28,11 @@ spec = do
       [hsst| zip(words("a b"), words("x y")) |] `outputs` "a\tx\nb\ty"
 
     it "a list inside a pair stays on one row, Show-style" $
-      [hsst| (words("a b"), 1) |] `outputs` "[\"a\",\"b\"]\t1"
+      [hsst| (words("a b"), 1) |] `outputs` "[\"a\", \"b\"]\t1"
 
     it "tee renders a pair Show-style" $
       runProgramWithLog "(1, \"a\") & tee" ""
-        `shouldBe` Right ("1\ta", ["(1,\"a\")"])
+        `shouldBe` Right ("1\ta", ["(1, \"a\")"])
 
   describe "lambda pair patterns" $ do
     it "destructures a pair" $

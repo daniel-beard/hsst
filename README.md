@@ -26,9 +26,17 @@ Under the hood the pipeline is `parse → resolve to de Bruijn indices → infer
 
 ⚠️ This is under-documented, and will remain so until the core language design has settled down a bit. It's all very experimental.
 
-`hsst -h` lists the signatures of a primitive, or every primitive that mentions a type:
+`hsst -h` shows a primitive's signatures (with a description and examples, where it's documented), or every primitive that mentions a type:
 
 ```
+> hsst -h swap
+swap :: (a, b) -> (b, a)
+
+Swaps the order of the two values in a pair
+
+>>> swap(("1", 2))
+(2, "1")
+
 > hsst -h uppercase
 uppercase :: String -> String
 uppercase :: Char -> Char
@@ -38,9 +46,21 @@ match :: Regex -> String -> String
 matches :: Regex -> String -> Bool
 ```
 
-A non-complete list of primitives:
+Primitives are documented `doc` quasi quoter.
+Examples are compile time checked, and the test suite runs every example against its expected output.
+
+```haskell
+prim "swap" (Scheme [a, b] $ tyPair a b ::-> tyPair b a) implSwap
+  `documented` [doc|
+    Swaps the order of the two values in a pair
+
+    >>> swap(("1", 2))
+    (2, "1")
+  |],
+```
+
+A non-complete list of types (see the full list with `hsst -t`):
 - `Int`, `Bool`, `Char`, `List a`, `String`, `Regex`, `Pair`
-- map/filter/take/reverse
 
 ## Pairs
 
